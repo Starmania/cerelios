@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>fr.cerelios</groupId>
+    <artifactId>cerelios</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Cerelios</name>
+    <description>Application client-serveur de vote électronique (SAÉ S3.B.01)</description>
+
+    <modules>
+        <module>crypto</module>
+        <module>protocole</module>
+        <module>urne</module>
+        <module>electeur</module>
+        <module>scrutateur</module>
+        <module>attaques</module>
+    </modules>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <junit.version>5.11.4</junit.version>
+        <protobuf.version>4.36.2</protobuf.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>fr.cerelios</groupId>
+                <artifactId>crypto</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>fr.cerelios</groupId>
+                <artifactId>protocole</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>fr.cerelios</groupId>
+                <artifactId>urne</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>fr.cerelios</groupId>
+                <artifactId>electeur</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>fr.cerelios</groupId>
+                <artifactId>scrutateur</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>${protobuf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <!-- JUnit est disponible dans tous les modules -->
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.13.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.2</version>
+                </plugin>
+                <!-- Génère les classes Java à partir des fichiers de src/main/protobuf -->
+                <plugin>
+                    <groupId>io.github.ascopes</groupId>
+                    <artifactId>protobuf-maven-plugin</artifactId>
+                    <version>5.1.11</version>
+                    <configuration>
+                        <protoc kind="binary-maven">
+                            <version>${protobuf.version}</version>
+                        </protoc>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>generate</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

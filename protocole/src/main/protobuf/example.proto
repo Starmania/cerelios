@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package cerelios;
+
+option java_package = "fr.cerelios.protocole.messages";
+option java_multiple_files = true;
+
+message Example {
+  string text = 1;
+  bytes big_int = 2;
+}

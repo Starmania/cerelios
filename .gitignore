@@ -1,0 +1,17 @@
+# Maven
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Secrets et fichiers locaux
+.env
+*.jks
+*.p12
+.~lock.*#
+.DS_Store
