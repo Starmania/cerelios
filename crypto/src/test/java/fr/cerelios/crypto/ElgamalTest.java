@@ -2,8 +2,11 @@ package fr.cerelios.crypto;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import fr.cerelios.crypto.Elgamal.Chiffre;
 import fr.cerelios.crypto.Elgamal.PaireDeCles;
 import java.math.BigInteger;
 import org.junit.jupiter.api.Test;
@@ -37,5 +40,35 @@ class ElgamalTest {
         PaireDeCles cles = Elgamal.keyGen(GROUPE);
 
         assertFalse(cles.toString().contains(cles.secrete().toString()));
+    }
+
+    @Test
+    void encryptCacheLeVoteSousLaCleDuReferendum() {
+        PaireDeCles cles = Elgamal.keyGen(GROUPE);
+        BigInteger p = GROUPE.p();
+
+        for (int vote = 0; vote <= 1; vote++) {
+            Chiffre chiffre = Elgamal.encrypt(GROUPE, cles.publique(), vote);
+
+            // Avec la clé secrète, v / u^x redonne g^vote.
+            BigInteger masque = chiffre.u().modPow(cles.secrete(), p);
+            assertEquals(GROUPE.g().pow(vote), chiffre.v().multiply(masque.modInverse(p)).mod(p));
+        }
+        assertNotEquals(
+                Elgamal.encrypt(GROUPE, cles.publique(), 1),
+                Elgamal.encrypt(GROUPE, cles.publique(), 1));
+    }
+
+    @Test
+    void encryptRefuseUnVoteOuUneCleInvalide() {
+        BigInteger y = Elgamal.keyGen(GROUPE).publique();
+
+        assertThrows(IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, y, 2));
+        assertThrows(IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, y, -1));
+        assertThrows(
+                IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, BigInteger.ONE, 1));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> Elgamal.encrypt(GROUPE, GROUPE.p().subtract(BigInteger.ONE), 1));
     }
 }
