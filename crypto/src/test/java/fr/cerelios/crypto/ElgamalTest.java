@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import fr.cerelios.crypto.Elgamal.Chiffre;
 import fr.cerelios.crypto.Elgamal.PaireDeCles;
 import java.math.BigInteger;
+import java.security.SecureRandom;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 class ElgamalTest {
@@ -70,5 +72,35 @@ class ElgamalTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> Elgamal.encrypt(GROUPE, GROUPE.p().subtract(BigInteger.ONE), 1));
+    }
+
+    @Test
+    void laPartPubliqueEstGPuissanceLaPartSecrete() {
+        PaireDeCles cles = Elgamal.keyGen(GROUPE, aleaFixe(0x42));
+
+        // 2047 bits tirés : le bit de poids fort du premier octet 0x42 est déjà nul.
+        BigInteger x = new BigInteger("42".repeat(256), 16);
+        assertEquals(x, cles.secrete());
+        assertEquals(GROUPE.g().modPow(x, GROUPE.p()), cles.publique());
+    }
+
+    @Test
+    void lesExposantsHorsIntervalleSontRetires() {
+        // 0 puis une valeur supérieure à q sont rejetés, la troisième est gardée.
+        BigInteger x = GROUPE.tirerExposant(aleaFixe(0x00, 0xFF, 0x01));
+
+        assertEquals(new BigInteger("01".repeat(256), 16), x);
+    }
+
+    /** Aléa dont le n-ième tirage ne contient que le n-ième octet donné. */
+    private static SecureRandom aleaFixe(int... octets) {
+        return new SecureRandom() {
+            private int tirage = 0;
+
+            @Override
+            public void nextBytes(byte[] tampon) {
+                Arrays.fill(tampon, (byte) octets[tirage++]);
+            }
+        };
     }
 }

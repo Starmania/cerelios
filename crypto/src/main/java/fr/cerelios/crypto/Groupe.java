@@ -2,6 +2,7 @@ package fr.cerelios.crypto;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
+import org.jetbrains.annotations.TestOnly;
 
 /**
  * Groupe dans lequel se font les calculs Elgamal : {@code g} engendre le sous-groupe d'ordre
@@ -30,9 +31,15 @@ public record Groupe(BigInteger p, BigInteger q, BigInteger g) {
 
     /** Tire un exposant uniformément dans [1, q - 1]. */
     public BigInteger tirerExposant() {
+        return tirerExposant(ALEA);
+    }
+
+    /** Comme {@link #tirerExposant()}, avec un aléa choisi : réservé aux tests. */
+    @TestOnly
+    BigInteger tirerExposant(SecureRandom alea) {
         BigInteger x;
         do {
-            x = new BigInteger(q.bitLength(), ALEA);
+            x = new BigInteger(q.bitLength(), alea);
         } while (x.signum() == 0 || x.compareTo(q) >= 0);
         return x;
     }
