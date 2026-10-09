@@ -44,7 +44,7 @@ scrutateur ─┘
 attaques ──> urne, electeur, scrutateur
 ```
 
-- `crypto` ne dépend que du JDK.
+- `crypto` ne dépend que du JDK à l'exécution (les annotations JetBrains, communes à tous les modules, ne servent qu'à la compilation).
 - La clé secrète ne quitte jamais `scrutateur`.
 - Aucun module ne dépend de `attaques`.
 
