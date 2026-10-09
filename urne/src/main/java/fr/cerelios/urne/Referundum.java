@@ -1,5 +1,7 @@
     package fr.cerelios.urne;
 
+    import org.jetbrains.annotations.TestOnly;
+
     import java.time.Clock;
     import java.time.Instant;
 
@@ -16,7 +18,7 @@
             return Instant.now(horloge).isAfter(dateFin);
         }
 
-        
+        @TestOnly
         Referundum(Instant dateFin, Clock horloge){
             this.dateFin = dateFin;
             this.horloge = horloge;
