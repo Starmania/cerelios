@@ -22,6 +22,9 @@ public final class Elgamal {
         }
     }
 
+    /** Vote chiffré : u = g^r mod p et v = g^vote · y^r mod p. */
+    public record Chiffre(BigInteger u, BigInteger v) {}
+
     /** Génère une part de clé : x tiré au hasard, y = g^x mod p. */
     public static PaireDeCles keyGen(Groupe groupe) {
         return keyGen(groupe, groupe.tirerExposant());
@@ -35,5 +38,34 @@ public final class Elgamal {
 
     private static PaireDeCles keyGen(Groupe groupe, BigInteger x) {
         return new PaireDeCles(x, groupe.g().modPow(x, groupe.p()));
+    }
+
+    /**
+     * Chiffre un vote 0 ou 1 avec la clé {@code y} du référendum. Le vote est placé en exposant
+     * pour que le produit de deux chiffrés soit un chiffré de la somme des votes.
+     */
+    public static Chiffre encrypt(Groupe groupe, BigInteger y, int vote) {
+        return encrypt(groupe, y, vote, groupe.tirerExposant());
+    }
+
+    /** Comme {@link #encrypt(Groupe, BigInteger, int)}, avec un aléa choisi : réservé aux tests. */
+    @TestOnly
+    static Chiffre encrypt(Groupe groupe, BigInteger y, int vote, SecureRandom alea) {
+        return encrypt(groupe, y, vote, groupe.tirerExposant(alea));
+    }
+
+    private static Chiffre encrypt(Groupe groupe, BigInteger y, int vote, BigInteger r) {
+        if (vote != 0 && vote != 1) {
+            throw new IllegalArgumentException("Le vote doit valoir 0 ou 1");
+        }
+        BigInteger p = groupe.p();
+        // Avec une clé hors du sous-groupe d'ordre q (1 ou p - 1 par exemple), v révélerait le vote.
+        if (y.compareTo(BigInteger.ONE) <= 0
+                || y.compareTo(p) >= 0
+                || !y.modPow(groupe.q(), p).equals(BigInteger.ONE)) {
+            throw new IllegalArgumentException("Clé publique hors du sous-groupe d'ordre q");
+        }
+        BigInteger gVote = vote == 1 ? groupe.g() : BigInteger.ONE;
+        return new Chiffre(groupe.g().modPow(r, p), gVote.multiply(y.modPow(r, p)).mod(p));
     }
 }

@@ -2,8 +2,11 @@ package fr.cerelios.crypto;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import fr.cerelios.crypto.Elgamal.Chiffre;
 import fr.cerelios.crypto.Elgamal.PaireDeCles;
 import java.math.BigInteger;
 import java.security.SecureRandom;
@@ -42,6 +45,70 @@ class ElgamalTest {
     }
 
     @Test
+    void encryptCacheLeVoteSousLaCleDuReferendum() {
+        PaireDeCles cles = Elgamal.keyGen(GROUPE);
+
+        for (int vote = 0; vote <= 1; vote++) {
+            Chiffre chiffre = Elgamal.encrypt(GROUPE, cles.publique(), vote);
+
+            assertEquals(GROUPE.g().pow(vote), gPuissanceVote(chiffre, cles.secrete()));
+        }
+        assertNotEquals(
+                Elgamal.encrypt(GROUPE, cles.publique(), 1),
+                Elgamal.encrypt(GROUPE, cles.publique(), 1));
+    }
+
+    @Test
+    void leProduitDeDeuxChiffresChiffreLaSommeDesVotes() {
+        PaireDeCles cles = Elgamal.keyGen(GROUPE);
+        BigInteger p = GROUPE.p();
+
+        for (int vote1 = 0; vote1 <= 1; vote1++) {
+            for (int vote2 = 0; vote2 <= 1; vote2++) {
+                Chiffre a = Elgamal.encrypt(GROUPE, cles.publique(), vote1);
+                Chiffre b = Elgamal.encrypt(GROUPE, cles.publique(), vote2);
+                Chiffre produit =
+                        new Chiffre(a.u().multiply(b.u()).mod(p), a.v().multiply(b.v()).mod(p));
+
+                assertEquals(
+                        GROUPE.g().pow(vote1 + vote2), gPuissanceVote(produit, cles.secrete()));
+            }
+        }
+    }
+
+    @Test
+    void encryptRefuseUnVoteOuUneCleInvalide() {
+        BigInteger y = Elgamal.keyGen(GROUPE).publique();
+
+        assertThrows(IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, y, 2));
+        assertThrows(IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, y, -1));
+        assertThrows(IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, y.negate(), 1));
+        assertThrows(
+                IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, BigInteger.ZERO, 1));
+        assertThrows(
+                IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, BigInteger.ONE, 1));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> Elgamal.encrypt(GROUPE, GROUPE.p().subtract(BigInteger.ONE), 1));
+        assertThrows(IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, GROUPE.p(), 1));
+    }
+
+    @Test
+    void encryptCalculeUEtVAvecLExposantTire() {
+        BigInteger p = GROUPE.p();
+        BigInteger y = Elgamal.keyGen(GROUPE, aleaFixe(0x01)).publique();
+
+        // Même tirage que dans laPartPubliqueEstGPuissanceLaPartSecrete.
+        BigInteger r = new BigInteger("42".repeat(256), 16);
+        for (int vote = 0; vote <= 1; vote++) {
+            Chiffre chiffre = Elgamal.encrypt(GROUPE, y, vote, aleaFixe(0x42));
+
+            assertEquals(GROUPE.g().modPow(r, p), chiffre.u());
+            assertEquals(GROUPE.g().pow(vote).multiply(y.modPow(r, p)).mod(p), chiffre.v());
+        }
+    }
+
+    @Test
     void laPartPubliqueEstGPuissanceLaPartSecrete() {
         PaireDeCles cles = Elgamal.keyGen(GROUPE, aleaFixe(0x42));
 
@@ -57,6 +124,12 @@ class ElgamalTest {
         BigInteger x = GROUPE.tirerExposant(aleaFixe(0x00, 0xFF, 0x01));
 
         assertEquals(new BigInteger("01".repeat(256), 16), x);
+    }
+
+    /** Déchiffrement à la main, en attendant Decrypt : v / u^x redonne g^vote. */
+    private static BigInteger gPuissanceVote(Chiffre chiffre, BigInteger x) {
+        BigInteger p = GROUPE.p();
+        return chiffre.v().multiply(chiffre.u().modPow(x, p).modInverse(p)).mod(p);
     }
 
     /** Aléa dont le n-ième tirage ne contient que le n-ième octet donné. */
