@@ -47,18 +47,33 @@ class ElgamalTest {
     @Test
     void encryptCacheLeVoteSousLaCleDuReferendum() {
         PaireDeCles cles = Elgamal.keyGen(GROUPE);
-        BigInteger p = GROUPE.p();
 
         for (int vote = 0; vote <= 1; vote++) {
             Chiffre chiffre = Elgamal.encrypt(GROUPE, cles.publique(), vote);
 
-            // Avec la clé secrète, v / u^x redonne g^vote.
-            BigInteger masque = chiffre.u().modPow(cles.secrete(), p);
-            assertEquals(GROUPE.g().pow(vote), chiffre.v().multiply(masque.modInverse(p)).mod(p));
+            assertEquals(GROUPE.g().pow(vote), gPuissanceVote(chiffre, cles.secrete()));
         }
         assertNotEquals(
                 Elgamal.encrypt(GROUPE, cles.publique(), 1),
                 Elgamal.encrypt(GROUPE, cles.publique(), 1));
+    }
+
+    @Test
+    void leProduitDeDeuxChiffresChiffreLaSommeDesVotes() {
+        PaireDeCles cles = Elgamal.keyGen(GROUPE);
+        BigInteger p = GROUPE.p();
+
+        for (int vote1 = 0; vote1 <= 1; vote1++) {
+            for (int vote2 = 0; vote2 <= 1; vote2++) {
+                Chiffre a = Elgamal.encrypt(GROUPE, cles.publique(), vote1);
+                Chiffre b = Elgamal.encrypt(GROUPE, cles.publique(), vote2);
+                Chiffre produit =
+                        new Chiffre(a.u().multiply(b.u()).mod(p), a.v().multiply(b.v()).mod(p));
+
+                assertEquals(
+                        GROUPE.g().pow(vote1 + vote2), gPuissanceVote(produit, cles.secrete()));
+            }
+        }
     }
 
     @Test
@@ -67,11 +82,15 @@ class ElgamalTest {
 
         assertThrows(IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, y, 2));
         assertThrows(IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, y, -1));
+        assertThrows(IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, y.negate(), 1));
+        assertThrows(
+                IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, BigInteger.ZERO, 1));
         assertThrows(
                 IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, BigInteger.ONE, 1));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> Elgamal.encrypt(GROUPE, GROUPE.p().subtract(BigInteger.ONE), 1));
+        assertThrows(IllegalArgumentException.class, () -> Elgamal.encrypt(GROUPE, GROUPE.p(), 1));
     }
 
     @Test
@@ -105,6 +124,12 @@ class ElgamalTest {
         BigInteger x = GROUPE.tirerExposant(aleaFixe(0x00, 0xFF, 0x01));
 
         assertEquals(new BigInteger("01".repeat(256), 16), x);
+    }
+
+    /** Déchiffrement à la main, en attendant Decrypt : v / u^x redonne g^vote. */
+    private static BigInteger gPuissanceVote(Chiffre chiffre, BigInteger x) {
+        BigInteger p = GROUPE.p();
+        return chiffre.v().multiply(chiffre.u().modPow(x, p).modInverse(p)).mod(p);
     }
 
     /** Aléa dont le n-ième tirage ne contient que le n-ième octet donné. */
