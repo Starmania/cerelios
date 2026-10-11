@@ -45,6 +45,16 @@ public final class Elgamal {
      * pour que le produit de deux chiffrés soit un chiffré de la somme des votes.
      */
     public static Chiffre encrypt(Groupe groupe, BigInteger y, int vote) {
+        return encrypt(groupe, y, vote, groupe.tirerExposant());
+    }
+
+    /** Comme {@link #encrypt(Groupe, BigInteger, int)}, avec un aléa choisi : réservé aux tests. */
+    @TestOnly
+    static Chiffre encrypt(Groupe groupe, BigInteger y, int vote, SecureRandom alea) {
+        return encrypt(groupe, y, vote, groupe.tirerExposant(alea));
+    }
+
+    private static Chiffre encrypt(Groupe groupe, BigInteger y, int vote, BigInteger r) {
         if (vote != 0 && vote != 1) {
             throw new IllegalArgumentException("Le vote doit valoir 0 ou 1");
         }
@@ -55,7 +65,6 @@ public final class Elgamal {
                 || !y.modPow(groupe.q(), p).equals(BigInteger.ONE)) {
             throw new IllegalArgumentException("Clé publique hors du sous-groupe d'ordre q");
         }
-        BigInteger r = groupe.tirerExposant();
         BigInteger gVote = vote == 1 ? groupe.g() : BigInteger.ONE;
         return new Chiffre(groupe.g().modPow(r, p), gVote.multiply(y.modPow(r, p)).mod(p));
     }

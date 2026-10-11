@@ -75,6 +75,21 @@ class ElgamalTest {
     }
 
     @Test
+    void encryptCalculeUEtVAvecLExposantTire() {
+        BigInteger p = GROUPE.p();
+        BigInteger y = Elgamal.keyGen(GROUPE, aleaFixe(0x01)).publique();
+
+        // Même tirage que dans laPartPubliqueEstGPuissanceLaPartSecrete.
+        BigInteger r = new BigInteger("42".repeat(256), 16);
+        for (int vote = 0; vote <= 1; vote++) {
+            Chiffre chiffre = Elgamal.encrypt(GROUPE, y, vote, aleaFixe(0x42));
+
+            assertEquals(GROUPE.g().modPow(r, p), chiffre.u());
+            assertEquals(GROUPE.g().pow(vote).multiply(y.modPow(r, p)).mod(p), chiffre.v());
+        }
+    }
+
+    @Test
     void laPartPubliqueEstGPuissanceLaPartSecrete() {
         PaireDeCles cles = Elgamal.keyGen(GROUPE, aleaFixe(0x42));
 
