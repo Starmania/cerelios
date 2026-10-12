@@ -71,6 +71,17 @@ public final class Elgamal {
     }
 
     /**
+     * Agrège deux chiffrés en (u × u′ mod p, v × v′ mod p), qui chiffre la somme de leurs votes.
+     * Le calcul n'utilise aucun secret : chacun peut le refaire à partir des bulletins publiés.
+     */
+    public static Chiffre agrege(Groupe groupe, Chiffre a, Chiffre b) {
+        // Les chiffrés ne sont pas vérifiés : un seul hors du groupe, (0, 0) par exemple, rend
+        // l'agrégat indéchiffrable.
+        BigInteger p = groupe.p();
+        return new Chiffre(a.u().multiply(b.u()).mod(p), a.v().multiply(b.v()).mod(p));
+    }
+
+    /**
      * Déchiffrement partiel d'un scrutateur : u^x mod p, calculé avec sa part secrète {@code x}. Il
      * ne suffit pas à déchiffrer tant qu'il manque la part d'un autre scrutateur.
      */

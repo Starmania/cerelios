@@ -128,6 +128,60 @@ class ElgamalTest {
     }
 
     @Test
+    void agregeMultiplieLesComposantesModuloP() {
+        BigInteger p = GROUPE.p();
+        Chiffre a = new Chiffre(p.subtract(BigInteger.ONE), p.subtract(BigInteger.TWO));
+        Chiffre b = new Chiffre(p.subtract(BigInteger.ONE), BigInteger.TWO);
+
+        // (-1)(-1) = 1 et (-2)(2) = -4 : les deux produits dépassent p avant réduction.
+        assertEquals(
+                new Chiffre(BigInteger.ONE, p.subtract(BigInteger.valueOf(4))),
+                Elgamal.agrege(GROUPE, a, b));
+    }
+
+    @Test
+    void agregeDeDeuxBulletinsChiffreLaSommeDesVotes() {
+        PaireDeCles cles = Elgamal.keyGen(GROUPE);
+
+        for (int vote1 = 0; vote1 <= 1; vote1++) {
+            for (int vote2 = 0; vote2 <= 1; vote2++) {
+                Chiffre agregat =
+                        Elgamal.agrege(
+                                GROUPE,
+                                Elgamal.encrypt(GROUPE, cles.publique(), vote1),
+                                Elgamal.encrypt(GROUPE, cles.publique(), vote2));
+
+                assertEquals(
+                        GROUPE.g().pow(vote1 + vote2), gPuissanceVote(agregat, cles.secrete()));
+            }
+        }
+    }
+
+    @Test
+    void leDechiffrementDeLAgregatDeNBulletinsEstLaSommeDesNVotes() {
+        PaireDeCles cles = Elgamal.keyGen(GROUPE);
+        int[] votes = {1, 0, 1, 1, 0, 1};
+
+        Chiffre agregat = totalChiffre(cles.publique(), votes);
+
+        BigInteger partiel = Elgamal.dechiffrementPartiel(GROUPE, agregat, cles.secrete());
+        assertEquals(4, Elgamal.decrypt(GROUPE, agregat, List.of(partiel), votes.length));
+    }
+
+    @Test
+    void agregeNeDependPasDeLOrdreDesBulletins() {
+        BigInteger y = Elgamal.keyGen(GROUPE).publique();
+        Chiffre a = Elgamal.encrypt(GROUPE, y, 1);
+        Chiffre b = Elgamal.encrypt(GROUPE, y, 0);
+        Chiffre c = Elgamal.encrypt(GROUPE, y, 1);
+
+        assertEquals(Elgamal.agrege(GROUPE, a, b), Elgamal.agrege(GROUPE, b, a));
+        assertEquals(
+                Elgamal.agrege(GROUPE, Elgamal.agrege(GROUPE, a, b), c),
+                Elgamal.agrege(GROUPE, a, Elgamal.agrege(GROUPE, b, c)));
+    }
+
+    @Test
     void decryptRetrouveLaSommeDesVotesAPlusieursScrutateurs() {
         PaireDeCles a = Elgamal.keyGen(GROUPE);
         PaireDeCles b = Elgamal.keyGen(GROUPE);
