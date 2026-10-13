@@ -43,8 +43,8 @@ public class ReferundumTest {
     HorlogeControle horloge = new HorlogeControle(debut);
 
     Referundum r = new Referundum(fin, horloge);
-    
-    @Test 
+
+    @Test
     void ReferundumPasFini() {
         assertFalse(r.verifFini());
         horloge.regleHorloge(fin.minusNanos(1));
