@@ -1,4 +1,4 @@
-package fr.cerelios.urne;
+package fr.cerelios.protocole;
 
 import java.lang.System.Logger.Level;
 import java.util.ArrayList;

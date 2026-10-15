@@ -15,6 +15,7 @@ import fr.cerelios.crypto.Groupe;
 import fr.cerelios.crypto.Preuves;
 import fr.cerelios.protocole.Contextes;
 import fr.cerelios.protocole.Conversions;
+import fr.cerelios.protocole.MailJournal;
 import fr.cerelios.protocole.Verificateur;
 import fr.cerelios.protocole.messages.AjouterScrutateur;
 import fr.cerelios.protocole.messages.Connexion;

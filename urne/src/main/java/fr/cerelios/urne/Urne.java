@@ -7,6 +7,7 @@ import static fr.cerelios.protocole.Conversions.versProto;
 
 import fr.cerelios.crypto.Groupe;
 import fr.cerelios.protocole.Conversions;
+import fr.cerelios.protocole.ServiceMail;
 import fr.cerelios.protocole.messages.CredentialPublic;
 import fr.cerelios.protocole.messages.Dates;
 import fr.cerelios.protocole.messages.DeposerCle;

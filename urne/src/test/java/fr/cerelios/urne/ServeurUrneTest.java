@@ -7,6 +7,7 @@ import fr.cerelios.autorite.AutoriteCertification;
 import fr.cerelios.crypto.Groupe;
 import fr.cerelios.electeur.Electeur;
 import fr.cerelios.protocole.ClientUrne;
+import fr.cerelios.protocole.MailJournal;
 import fr.cerelios.protocole.Verificateur;
 import fr.cerelios.protocole.messages.AjouterScrutateur;
 import fr.cerelios.protocole.messages.CreerReferendum;

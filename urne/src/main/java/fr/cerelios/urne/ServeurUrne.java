@@ -1,5 +1,6 @@
 package fr.cerelios.urne;
 
+import fr.cerelios.protocole.MailJournal;
 import fr.cerelios.protocole.messages.Reponse;
 import fr.cerelios.protocole.messages.Requete;
 import java.io.IOException;
