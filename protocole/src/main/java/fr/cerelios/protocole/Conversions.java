@@ -1,14 +1,20 @@
 package fr.cerelios.protocole;
 
 import com.google.protobuf.ByteString;
+import fr.cerelios.crypto.ChiffrementHybride;
 import fr.cerelios.crypto.Elgamal;
 import fr.cerelios.crypto.Preuves;
 import fr.cerelios.protocole.messages.Bulletin;
 import fr.cerelios.protocole.messages.Chiffre;
+import fr.cerelios.protocole.messages.PartChiffree;
+import fr.cerelios.protocole.messages.Polynome;
 import fr.cerelios.protocole.messages.PreuveDechiffrement;
 import fr.cerelios.protocole.messages.PreuveSchnorr;
 import fr.cerelios.protocole.messages.PreuveZeroOuUn;
 import java.math.BigInteger;
+import java.util.List;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 /** Passage des types de {@code crypto} aux messages protobuf, et retour. */
 public final class Conversions {
@@ -74,6 +80,37 @@ public final class Conversions {
 
     public static Preuves.PreuveDechiffrement depuisProto(PreuveDechiffrement p) {
         return new Preuves.PreuveDechiffrement(entier(p.getDefi()), entier(p.getReponse()));
+    }
+
+    public static PartChiffree versProto(int destinataire, ChiffrementHybride.Message m) {
+        return PartChiffree.newBuilder()
+                .setDestinataire(destinataire)
+                .setR(octets(m.r()))
+                .setNonce(ByteString.copyFrom(m.nonce()))
+                .setDonnees(ByteString.copyFrom(m.donnees()))
+                .build();
+    }
+
+    public static ChiffrementHybride.Message depuisProto(PartChiffree p) {
+        return new ChiffrementHybride.Message(
+                entier(p.getR()), p.getNonce().toByteArray(), p.getDonnees().toByteArray());
+    }
+
+    /** Engagements d'un polynôme. */
+    public static List<BigInteger> entiers(List<ByteString> octets) {
+        return octets.stream().map(Conversions::entier).toList();
+    }
+
+    /** Parts d'un polynôme, triées par destinataire. */
+    public static SortedMap<Integer, ChiffrementHybride.Message> parts(Polynome polynome) {
+        SortedMap<Integer, ChiffrementHybride.Message> parts = new TreeMap<>();
+        for (PartChiffree p : polynome.getPartsList()) {
+            if (parts.put(p.getDestinataire(), depuisProto(p)) != null) {
+                throw new IllegalArgumentException(
+                        "Deux parts pour le scrutateur " + p.getDestinataire());
+            }
+        }
+        return parts;
     }
 
     public static Bulletin versProto(fr.cerelios.crypto.Bulletin b) {

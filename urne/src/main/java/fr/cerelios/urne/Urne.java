@@ -6,16 +6,22 @@ import static fr.cerelios.protocole.Conversions.octets;
 import static fr.cerelios.protocole.Conversions.versProto;
 
 import fr.cerelios.crypto.Groupe;
+import fr.cerelios.protocole.Conversions;
 import fr.cerelios.protocole.messages.CredentialPublic;
 import fr.cerelios.protocole.messages.Dates;
+import fr.cerelios.protocole.messages.DeposerCle;
+import fr.cerelios.protocole.messages.DeposerPolynome;
 import fr.cerelios.protocole.messages.DonneesPubliques;
 import fr.cerelios.protocole.messages.Electeurs;
 import fr.cerelios.protocole.messages.Emargement;
 import fr.cerelios.protocole.messages.Erreur;
+import fr.cerelios.protocole.messages.EtatPartage;
 import fr.cerelios.protocole.messages.EvenementScellement;
 import fr.cerelios.protocole.messages.Identifiant;
 import fr.cerelios.protocole.messages.Jeton;
 import fr.cerelios.protocole.messages.ListeReferendums;
+import fr.cerelios.protocole.messages.Polynome;
+import fr.cerelios.protocole.messages.PolynomeRecu;
 import fr.cerelios.protocole.messages.Recepisse;
 import fr.cerelios.protocole.messages.ReferendumPublic;
 import fr.cerelios.protocole.messages.Reponse;
@@ -149,6 +155,14 @@ public class Urne {
                 yield ok();
             }
             case LISTER_MES_REFERENDUMS -> mesReferendums(jeton);
+            case DEFINIR_SEUIL ->
+                    commeProprietaire(
+                            jeton,
+                            r.getDefinirSeuil().getReferendum(),
+                            ref -> ref.definirSeuil(r.getDefinirSeuil().getSeuil()));
+            case DEPOSER_CLE_CANAL -> deposerCleCanal(jeton, r.getDeposerCleCanal());
+            case DEPOSER_POLYNOME -> deposerPolynome(jeton, r.getDeposerPolynome());
+            case OBTENIR_PARTAGE -> partage(jeton, r.getObtenirPartage().getReferendum());
             case DEPOSER_CLE -> {
                 var m = r.getDeposerCle();
                 yield sur(
@@ -287,6 +301,55 @@ public class Urne {
         return Reponse.newBuilder().setReferendums(liste).build();
     }
 
+    // ---- Partage à seuil -----------------------------------------------------------------------
+
+    private Reponse deposerCleCanal(String jeton, DeposerCle m) {
+        return sur(
+                m.getReferendum(),
+                ref ->
+                        ref.deposerCleCanal(
+                                jeton, entier(m.getClePublique()), depuisProto(m.getPreuve())));
+    }
+
+    private Reponse deposerPolynome(String jeton, DeposerPolynome m) {
+        Polynome p = m.getPolynome();
+        Referundum.Polynome polynome =
+                new Referundum.Polynome(
+                        Conversions.entiers(p.getEngagementsList()),
+                        Conversions.parts(p),
+                        depuisProto(p.getSignature()));
+        return sur(m.getReferendum(), ref -> ref.deposerPolynome(jeton, polynome));
+    }
+
+    /** Ce qu'un scrutateur doit savoir pour avancer dans le partage, polynômes de tous compris. */
+    private Reponse partage(String jeton, String id) {
+        Referundum ref = referendum(id);
+        EtatPartage.Builder etat = EtatPartage.newBuilder();
+        synchronized (ref) {
+            Referundum.Scrutateur moi = ref.scrutateurParJeton(jeton);
+            etat.setIndice(ref.indice(moi))
+                    .setSeuil(ref.seuil())
+                    .setEtape(EtatPartage.Etape.valueOf(ref.etapePartage().name()))
+                    .addAllScrutateurs(versPublic(ref).getScrutateursList());
+            for (Referundum.Scrutateur s : ref.scrutateurs()) {
+                if (s.polynome() != null) {
+                    etat.addPolynomes(
+                            PolynomeRecu.newBuilder()
+                                    .setEmetteur(s.nom())
+                                    .setPolynome(polynomeVersProto(s.polynome())));
+                }
+            }
+        }
+        return Reponse.newBuilder().setPartage(etat).build();
+    }
+
+    private static Polynome polynomeVersProto(Referundum.Polynome polynome) {
+        Polynome.Builder p = Polynome.newBuilder().setSignature(versProto(polynome.signature()));
+        polynome.engagements().forEach(e -> p.addEngagements(octets(e)));
+        polynome.parts().forEach((j, part) -> p.addParts(Conversions.versProto(j, part)));
+        return p.build();
+    }
+
     // ---- Vote ----------------------------------------------------------------------------------
 
     private Reponse deposerBulletin(
@@ -349,7 +412,8 @@ public class Urne {
                         .setEtat(fr.cerelios.protocole.messages.Etat.valueOf(ref.etat().name()))
                         .setNombreElecteurs(ref.nombreElecteurs())
                         .setNombreBulletins(ref.nombreBulletins())
-                        .setScelle(ref.scelle());
+                        .setScelle(ref.scelle())
+                        .setSeuil(ref.seuil());
         if (ref.ouverture() != null) {
             p.setDates(dates(ref.ouverture(), ref.cloture(), ref.publication(), ref.delaiGrace()));
         }
@@ -357,7 +421,14 @@ public class Urne {
             p.setCle(octets(ref.cle()));
         }
         for (Referundum.Scrutateur s : ref.scrutateurs()) {
-            ScrutateurPublic.Builder sp = ScrutateurPublic.newBuilder().setNom(s.nom());
+            ScrutateurPublic.Builder sp =
+                    ScrutateurPublic.newBuilder().setNom(s.nom()).setIndice(ref.indice(s));
+            if (s.cleCanal() != null) {
+                sp.setCleCanal(octets(s.cleCanal())).setPreuveCanal(versProto(s.preuveCanal()));
+            }
+            if (s.polynome() != null) {
+                s.polynome().engagements().forEach(e -> sp.addEngagements(octets(e)));
+            }
             if (s.clePublique() != null) {
                 sp.setClePublique(octets(s.clePublique())).setPreuveCle(versProto(s.preuveCle()));
             }

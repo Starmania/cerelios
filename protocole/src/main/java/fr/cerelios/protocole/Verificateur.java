@@ -7,6 +7,7 @@ import com.google.protobuf.ByteString;
 import fr.cerelios.crypto.DechiffrementImpossibleException;
 import fr.cerelios.crypto.Elgamal;
 import fr.cerelios.crypto.Groupe;
+import fr.cerelios.crypto.Partage;
 import fr.cerelios.crypto.Preuves;
 import fr.cerelios.protocole.messages.Bulletin;
 import fr.cerelios.protocole.messages.DonneesPubliques;
@@ -15,7 +16,9 @@ import fr.cerelios.protocole.messages.ScrutateurPublic;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -66,8 +69,37 @@ public final class Verificateur {
             }
             produit = produit.multiply(part).mod(groupe.p());
         }
-        if (!produit.equals(cle)) {
+        if (referendum.getSeuil() > 0) {
+            verifierPartage(referendum, cle, anomalies);
+        } else if (!produit.equals(cle)) {
             anomalies.add("La clé du référendum n'est pas le produit des clés des scrutateurs");
+        }
+    }
+
+    /**
+     * Mode à seuil : la clé du référendum et la clé de chaque part se recalculent à partir des
+     * engagements publiés. Chaque scrutateur a vérifié, lui, que sa part leur correspondait.
+     */
+    private void verifierPartage(
+            ReferendumPublic referendum, BigInteger cle, List<String> anomalies) {
+        List<List<BigInteger>> engagements = new ArrayList<>();
+        for (ScrutateurPublic s : referendum.getScrutateursList()) {
+            if (s.getEngagementsCount() != referendum.getSeuil()) {
+                anomalies.add("Engagements manquants pour le scrutateur " + s.getNom());
+                return;
+            }
+            engagements.add(Conversions.entiers(s.getEngagementsList()));
+        }
+        if (!Partage.clePublique(groupe, engagements).equals(cle)) {
+            anomalies.add("La clé du référendum ne correspond pas aux engagements des scrutateurs");
+        }
+        for (ScrutateurPublic s : referendum.getScrutateursList()) {
+            if (!s.getClePublique().isEmpty()
+                    && !Partage.clePartielle(groupe, engagements, s.getIndice())
+                            .equals(entier(s.getClePublique()))) {
+                anomalies.add(
+                        "La clé de part de " + s.getNom() + " ne correspond pas aux engagements");
+            }
         }
     }
 
@@ -126,7 +158,7 @@ public final class Verificateur {
         if (!total.equals(totalRecalcule)) {
             anomalies.add("Le total chiffré n'est pas l'agrégat des bulletins publiés");
         }
-        List<BigInteger> partiels = new ArrayList<>();
+        Map<Integer, BigInteger> partiels = new LinkedHashMap<>();
         for (ScrutateurPublic s : referendum.getScrutateursList()) {
             if (s.getDechiffrement().isEmpty()) {
                 continue;
@@ -141,22 +173,27 @@ public final class Verificateur {
                     Contextes.dechiffrement(referendum.getId(), s.getNom()))) {
                 anomalies.add("Déchiffrement partiel invalide pour le scrutateur " + s.getNom());
             }
-            partiels.add(partiel);
+            partiels.put(s.getIndice(), partiel);
         }
         if (!referendum.hasResultat()) {
             return;
         }
-        if (partiels.size() != referendum.getScrutateursCount()) {
-            anomalies.add("Résultat publié sans le déchiffrement de tous les scrutateurs");
+        int seuil = referendum.getSeuil();
+        if (seuil == 0
+                ? partiels.size() != referendum.getScrutateursCount()
+                : partiels.size() < seuil) {
+            anomalies.add("Résultat publié sans assez de déchiffrements partiels");
             return;
         }
+        List<BigInteger> facteurs =
+                seuil == 0 ? List.copyOf(partiels.values()) : Partage.ponderer(groupe, partiels);
         int oui = referendum.getResultat().getOui();
         int non = referendum.getResultat().getNon();
         if (oui + non != donnees.getBulletinsCount()) {
             anomalies.add("Oui + Non ne fait pas le nombre de bulletins");
         }
         try {
-            int somme = Elgamal.decrypt(groupe, total, partiels, referendum.getNombreElecteurs());
+            int somme = Elgamal.decrypt(groupe, total, facteurs, referendum.getNombreElecteurs());
             if (somme != oui) {
                 anomalies.add("Le total déchiffré donne " + somme + " Oui, pas " + oui);
             }

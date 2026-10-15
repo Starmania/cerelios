@@ -1,10 +1,12 @@
 package fr.cerelios.urne;
 
 import fr.cerelios.crypto.Bulletin;
+import fr.cerelios.crypto.ChiffrementHybride;
 import fr.cerelios.crypto.DechiffrementImpossibleException;
 import fr.cerelios.crypto.Elgamal.Chiffre;
 import fr.cerelios.crypto.Elgamal;
 import fr.cerelios.crypto.Groupe;
+import fr.cerelios.crypto.Partage;
 import fr.cerelios.crypto.Preuves.PreuveDechiffrement;
 import fr.cerelios.crypto.Preuves.PreuveSchnorr;
 import fr.cerelios.crypto.Preuves;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
 import org.jetbrains.annotations.TestOnly;
 
 /**
@@ -51,6 +54,9 @@ public class Referundum {
         private PreuveSchnorr preuveCle;
         private BigInteger dechiffrement;
         private PreuveDechiffrement preuveDechiffrement;
+        private BigInteger cleCanal;
+        private PreuveSchnorr preuveCanal;
+        private Polynome polynome;
 
         private Scrutateur(String nom, String email, String jeton) {
             this.nom = nom;
@@ -81,6 +87,35 @@ public class Referundum {
         public PreuveDechiffrement preuveDechiffrement() {
             return preuveDechiffrement;
         }
+
+        public BigInteger cleCanal() {
+            return cleCanal;
+        }
+
+        public PreuveSchnorr preuveCanal() {
+            return preuveCanal;
+        }
+
+        public Polynome polynome() {
+            return polynome;
+        }
+    }
+
+    /**
+     * Contribution d'un scrutateur au partage à seuil : engagements de son polynôme et parts
+     * chiffrées pour chaque scrutateur, par indice. L'urne ne peut pas lire les parts.
+     */
+    public record Polynome(
+            List<BigInteger> engagements,
+            SortedMap<Integer, ChiffrementHybride.Message> parts,
+            PreuveSchnorr signature) {}
+
+    /** Étapes du partage à seuil, communes à tous les scrutateurs. */
+    public enum EtapePartage {
+        CANAUX,
+        POLYNOMES,
+        CLES_PARTIELLES,
+        TERMINE
     }
 
     /** Fermeture du calendrier : les dates ne peuvent plus changer. */
@@ -116,6 +151,8 @@ public class Referundum {
 
     private final List<Scrutateur> scrutateurs = new ArrayList<>();
     private BigInteger cle;
+    // Nombre de scrutateurs qui suffisent à déchiffrer ; 0 : tous, chacun avec sa propre clé.
+    private int seuil;
 
     // Lien électeur -> credential : secret, il relierait un bulletin à son électeur.
     private final Map<String, BigInteger> credentials = new HashMap<>();
@@ -295,11 +332,23 @@ public class Referundum {
     }
 
     private boolean tousLesDechiffrementsSontLa() {
-        return scrutateurs.stream().allMatch(s -> s.dechiffrement != null);
+        long recus = scrutateurs.stream().filter(s -> s.dechiffrement != null).count();
+        return seuil == 0 ? recus == scrutateurs.size() : recus >= seuil;
     }
 
     private void publier(Instant maintenant) {
-        List<BigInteger> partiels = scrutateurs.stream().map(s -> s.dechiffrement).toList();
+        List<BigInteger> partiels;
+        if (seuil == 0) {
+            partiels = scrutateurs.stream().map(s -> s.dechiffrement).toList();
+        } else {
+            Map<Integer, BigInteger> parIndice = new LinkedHashMap<>();
+            for (Scrutateur s : scrutateurs) {
+                if (s.dechiffrement != null) {
+                    parIndice.put(indice(s), s.dechiffrement);
+                }
+            }
+            partiels = Partage.ponderer(groupe, parIndice);
+        }
         try {
             int oui = Elgamal.decrypt(groupe, total, partiels, nombreElecteurs);
             resultat = new Resultat(oui, urne.size() - oui);
@@ -371,9 +420,36 @@ public class Referundum {
         this.delaiGrace = delaiGrace;
     }
 
+    /**
+     * Passe en mode à seuil : {@code seuil} scrutateurs sur tous suffiront à déchiffrer. 0 revient
+     * au mode où chacun a sa propre clé et où tous doivent déchiffrer.
+     */
+    public void definirSeuil(int seuil) {
+        exigerEtat(Etat.BROUILLON);
+        exigerPartageNonCommence();
+        if (seuil < 0) {
+            throw new RequeteRefusee("Seuil négatif");
+        }
+        if (scrutateurs.stream().anyMatch(s -> s.clePublique != null)) {
+            throw new RequeteRefusee("Des scrutateurs ont déjà déposé leur clé : mode figé");
+        }
+        this.seuil = seuil;
+    }
+
+    public int seuil() {
+        return seuil;
+    }
+
+    /** Indice d'un scrutateur dans le partage à seuil, à partir de 1. */
+    public int indice(Scrutateur scrutateur) {
+        return scrutateurs.indexOf(scrutateur) + 1;
+    }
+
     /** Inscrit un scrutateur et rend son jeton secret, à lui transmettre. */
     public String ajouterScrutateur(String nom, String email) {
         exigerEtat(Etat.BROUILLON);
+        // Les indices et le nombre de parts sont fixés dès la première clé de canal.
+        exigerPartageNonCommence();
         if (nom.isBlank() || scrutateurs.stream().anyMatch(s -> s.nom.equals(nom))) {
             throw new RequeteRefusee("Nom de scrutateur vide ou déjà pris : " + nom);
         }
@@ -406,9 +482,12 @@ public class Referundum {
         if (scrutateurs.isEmpty()) {
             manques.add("Au moins un scrutateur");
         }
+        if (seuil > scrutateurs.size()) {
+            manques.add("Seuil supérieur au nombre de scrutateurs");
+        }
         for (Scrutateur s : scrutateurs) {
             if (s.clePublique == null) {
-                manques.add("Clé du scrutateur " + s.nom);
+                manques.add((seuil == 0 ? "Clé du scrutateur " : "Partage à seuil de ") + s.nom);
             }
         }
         if (ouverture == null) {
@@ -427,9 +506,11 @@ public class Referundum {
                     "Impossible de valider, il manque : " + String.join(", ", manques));
         }
         cle =
-                scrutateurs.stream()
-                        .map(s -> s.clePublique)
-                        .reduce(BigInteger.ONE, (a, b) -> a.multiply(b).mod(groupe.p()));
+                seuil == 0
+                        ? scrutateurs.stream()
+                                .map(s -> s.clePublique)
+                                .reduce(BigInteger.ONE, (a, b) -> a.multiply(b).mod(groupe.p()))
+                        : Partage.clePublique(groupe, engagementsDeChacun());
         nombreElecteurs = electeurs.size();
         etat = Etat.VALIDE;
     }
@@ -454,11 +535,24 @@ public class Referundum {
                 .orElseThrow(() -> new RequeteRefusee("Jeton de scrutateur inconnu"));
     }
 
+    /**
+     * Dépose la clé publique du scrutateur. En mode à seuil, c'est la clé de sa part g^(x_j), que
+     * tout le monde peut recalculer à partir des engagements : elle doit leur correspondre.
+     */
     public void deposerCle(String jeton, BigInteger clePublique, PreuveSchnorr preuve) {
         exigerEtat(Etat.BROUILLON);
         Scrutateur s = scrutateurParJeton(jeton);
         if (s.clePublique != null) {
             throw new RequeteRefusee("Clé déjà déposée");
+        }
+        if (seuil > 0) {
+            if (etapePartage() != EtapePartage.CLES_PARTIELLES) {
+                throw new RequeteRefusee("Le partage n'en est pas aux clés partielles");
+            }
+            if (!clePublique.equals(
+                    Partage.clePartielle(groupe, engagementsDeChacun(), indice(s)))) {
+                throw new RequeteRefusee("La clé ne correspond pas aux engagements publiés");
+            }
         }
         if (clePublique.equals(BigInteger.ONE)
                 || !Preuves.verifierConnaissance(
@@ -487,6 +581,87 @@ public class Referundum {
         s.dechiffrement = partiel;
         s.preuveDechiffrement = preuve;
         etat();
+    }
+
+    // ---- Partage à seuil -----------------------------------------------------------------------
+
+    public EtapePartage etapePartage() {
+        if (scrutateurs.stream().anyMatch(s -> s.cleCanal == null)) {
+            return EtapePartage.CANAUX;
+        }
+        if (scrutateurs.stream().anyMatch(s -> s.polynome == null)) {
+            return EtapePartage.POLYNOMES;
+        }
+        if (scrutateurs.stream().anyMatch(s -> s.clePublique == null)) {
+            return EtapePartage.CLES_PARTIELLES;
+        }
+        return EtapePartage.TERMINE;
+    }
+
+    /** Première étape : la clé qui chiffrera les parts destinées à ce scrutateur. */
+    public void deposerCleCanal(String jeton, BigInteger cleCanal, PreuveSchnorr preuve) {
+        exigerEtat(Etat.BROUILLON);
+        Scrutateur s = scrutateurParJeton(jeton);
+        if (seuil == 0) {
+            throw new RequeteRefusee("Pas de partage à seuil pour ce référendum");
+        }
+        if (seuil > scrutateurs.size()) {
+            throw new RequeteRefusee("Seuil supérieur au nombre de scrutateurs");
+        }
+        if (s.cleCanal != null) {
+            throw new RequeteRefusee("Clé de canal déjà déposée");
+        }
+        if (cleCanal.equals(BigInteger.ONE)
+                || !Preuves.verifierConnaissance(
+                        groupe, cleCanal, preuve, Contextes.cleCanal(id, s.nom))) {
+            throw new RequeteRefusee("Preuve de connaissance de la clé de canal invalide");
+        }
+        s.cleCanal = cleCanal;
+        s.preuveCanal = preuve;
+    }
+
+    /**
+     * Deuxième étape : engagements du polynôme et une part chiffrée par scrutateur. L'urne ne peut
+     * pas vérifier les parts, chiffrées : chaque destinataire le fera avec les engagements.
+     */
+    public void deposerPolynome(String jeton, Polynome polynome) {
+        exigerEtat(Etat.BROUILLON);
+        Scrutateur s = scrutateurParJeton(jeton);
+        if (etapePartage() != EtapePartage.POLYNOMES) {
+            throw new RequeteRefusee("Le partage n'en est pas aux polynômes");
+        }
+        if (s.polynome != null) {
+            throw new RequeteRefusee("Polynôme déjà déposé");
+        }
+        if (polynome.engagements().size() != seuil
+                || !polynome.engagements().stream().allMatch(groupe::appartient)) {
+            throw new RequeteRefusee("Il faut " + seuil + " engagements dans le groupe");
+        }
+        Set<Integer> attendus = new HashSet<>();
+        for (int j = 1; j <= scrutateurs.size(); j++) {
+            attendus.add(j);
+        }
+        if (!polynome.parts().keySet().equals(attendus)) {
+            throw new RequeteRefusee("Il faut une part pour chaque scrutateur");
+        }
+        if (!Preuves.verifierConnaissance(
+                groupe,
+                s.cleCanal,
+                polynome.signature(),
+                Contextes.polynome(id, s.nom, polynome.engagements(), polynome.parts()))) {
+            throw new RequeteRefusee("Signature du polynôme invalide");
+        }
+        s.polynome = polynome;
+    }
+
+    private List<List<BigInteger>> engagementsDeChacun() {
+        return scrutateurs.stream().map(s -> s.polynome.engagements()).toList();
+    }
+
+    private void exigerPartageNonCommence() {
+        if (scrutateurs.stream().anyMatch(s -> s.cleCanal != null)) {
+            throw new RequeteRefusee("Le partage à seuil a commencé : scrutateurs et seuil figés");
+        }
     }
 
     // ---- Autorité de certification -------------------------------------------------------------

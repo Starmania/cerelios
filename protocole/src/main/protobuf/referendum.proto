@@ -32,6 +32,22 @@ message PreuveDechiffrement {
   bytes reponse = 2;
 }
 
+// Part f_i(j) chiffrée par le scrutateur i pour le scrutateur j (ChiffrementHybride).
+message PartChiffree {
+  int32 destinataire = 1; // indice j, à partir de 1
+  bytes r = 2;
+  bytes nonce = 3;
+  bytes donnees = 4;
+}
+
+// Contribution d'un scrutateur au partage à seuil : engagements g^(a_l) de son polynôme, une part
+// chiffrée pour chaque scrutateur (lui compris), signés avec sa clé de canal.
+message Polynome {
+  repeated bytes engagements = 1;
+  repeated PartChiffree parts = 2;
+  PreuveSchnorr signature = 3;
+}
+
 message Bulletin {
   bytes credential = 1;
   Chiffre chiffre = 2;
@@ -65,6 +81,11 @@ message ScrutateurPublic {
   PreuveSchnorr preuve_cle = 3;
   bytes dechiffrement = 4;          // vide tant que le déchiffrement n'est pas déposé
   PreuveDechiffrement preuve_dechiffrement = 5;
+  // Mode à seuil seulement : cle_publique est alors la clé de la part g^(x_j).
+  int32 indice = 6;
+  bytes cle_canal = 7;              // clé qui chiffre les parts destinées à ce scrutateur
+  PreuveSchnorr preuve_canal = 8;
+  repeated bytes engagements = 9;   // engagements de son polynôme
 }
 
 message CredentialPublic {
@@ -94,6 +115,7 @@ message ReferendumPublic {
   repeated ScrutateurPublic scrutateurs = 8;
   Resultat resultat = 9;           // absent avant la publication
   bool scelle = 10;
+  int32 seuil = 11; // 0 : tous les scrutateurs doivent déchiffrer
 }
 
 // Tout ce qu'il faut à un auditeur pour refaire les vérifications.
@@ -154,6 +176,16 @@ message DeposerCle {
   PreuveSchnorr preuve = 3;
 }
 
+message DefinirSeuil {
+  string referendum = 1;
+  int32 seuil = 2; // 0 revient au mode où tous déchiffrent
+}
+
+message DeposerPolynome {
+  string referendum = 1;
+  Polynome polynome = 2;
+}
+
 message DeposerDechiffrement {
   string referendum = 1;
   bytes dechiffrement = 2;
@@ -190,9 +222,13 @@ message Requete {
     Referendum archiver = 22;
     Referendum supprimer = 23;
     Referendum lister_mes_referendums = 24;
+    DefinirSeuil definir_seuil = 25;
 
     DeposerCle deposer_cle = 30;
     DeposerDechiffrement deposer_dechiffrement = 31;
+    DeposerCle deposer_cle_canal = 32;
+    DeposerPolynome deposer_polynome = 33;
+    Referendum obtenir_partage = 34;
 
     Referendum obtenir_electeurs = 40; // pour l'autorité de certification
     DeposerCredentials deposer_credentials = 41;
@@ -244,6 +280,27 @@ message ListeReferendums {
   repeated ReferendumPublic referendums = 1;
 }
 
+// Avancement du partage à seuil, vu par un scrutateur.
+message EtatPartage {
+  enum Etape {
+    ETAPE_INCONNUE = 0;
+    CANAUX = 1;         // chacun dépose sa clé de canal
+    POLYNOMES = 2;      // chacun dépose son polynôme et ses parts chiffrées
+    CLES_PARTIELLES = 3; // chacun dépose la clé publique de sa part
+    TERMINE = 4;
+  }
+  int32 indice = 1; // celui du scrutateur qui demande
+  int32 seuil = 2;
+  Etape etape = 3;
+  repeated ScrutateurPublic scrutateurs = 4;
+  repeated PolynomeRecu polynomes = 5;
+}
+
+message PolynomeRecu {
+  string emetteur = 1;
+  Polynome polynome = 2;
+}
+
 message Reponse {
   oneof contenu {
     Erreur erreur = 1;
@@ -257,5 +314,6 @@ message Reponse {
     Recepisse recepisse = 9;
     DonneesPubliques donnees_publiques = 10;
     ListeReferendums referendums = 11;
+    EtatPartage partage = 12;
   }
 }
