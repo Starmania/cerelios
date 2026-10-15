@@ -7,12 +7,15 @@ import static fr.cerelios.protocole.Conversions.versProto;
 
 import fr.cerelios.crypto.Groupe;
 import fr.cerelios.protocole.Conversions;
+import fr.cerelios.protocole.RefusException;
 import fr.cerelios.protocole.ServiceMail;
 import fr.cerelios.protocole.messages.CredentialPublic;
+import fr.cerelios.protocole.messages.CredentialsCertifies;
 import fr.cerelios.protocole.messages.Dates;
 import fr.cerelios.protocole.messages.DeposerCle;
 import fr.cerelios.protocole.messages.DeposerPolynome;
 import fr.cerelios.protocole.messages.DonneesPubliques;
+import fr.cerelios.protocole.messages.ElecteurAContacter;
 import fr.cerelios.protocole.messages.Electeurs;
 import fr.cerelios.protocole.messages.Emargement;
 import fr.cerelios.protocole.messages.Erreur;
@@ -21,6 +24,7 @@ import fr.cerelios.protocole.messages.EvenementScellement;
 import fr.cerelios.protocole.messages.Identifiant;
 import fr.cerelios.protocole.messages.Jeton;
 import fr.cerelios.protocole.messages.ListeReferendums;
+import fr.cerelios.protocole.messages.NouvelleDemande;
 import fr.cerelios.protocole.messages.Polynome;
 import fr.cerelios.protocole.messages.PolynomeRecu;
 import fr.cerelios.protocole.messages.Recepisse;
@@ -30,13 +34,16 @@ import fr.cerelios.protocole.messages.Requete;
 import fr.cerelios.protocole.messages.Resultat;
 import fr.cerelios.protocole.messages.ScrutateurPublic;
 import fr.cerelios.protocole.messages.Statut;
+import fr.cerelios.protocole.messages.ValidationCertification;
 import fr.cerelios.protocole.messages.Vide;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -64,18 +71,32 @@ public class Urne {
     private final ServiceMail mail;
     private final Clock horloge;
     private final Groupe groupe;
+    private final ConnecteurCertification certification;
+    private final String adressePublique;
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
     private final Map<String, Referundum> referendums = new ConcurrentHashMap<>();
 
     public Urne(FournisseurIdentite idp, ServiceMail mail, Clock horloge) {
-        this(idp, mail, horloge, Groupe.RFC_3526);
+        this(idp, mail, horloge, Groupe.RFC_3526, new ConnecteurCertification(), null);
     }
 
-    public Urne(FournisseurIdentite idp, ServiceMail mail, Clock horloge, Groupe groupe) {
+    /**
+     * @param adressePublique hôte:port où les autres programmes joignent cette urne ; le serveur de
+     *     credentials s'en sert pour savoir qui n'a pas voté. {@code null} si inconnue.
+     */
+    public Urne(
+            FournisseurIdentite idp,
+            ServiceMail mail,
+            Clock horloge,
+            Groupe groupe,
+            ConnecteurCertification certification,
+            String adressePublique) {
         this.idp = idp;
         this.mail = mail;
         this.horloge = horloge;
         this.groupe = groupe;
+        this.certification = certification;
+        this.adressePublique = adressePublique;
     }
 
     /** Traite une requête ; toute erreur devient une réponse {@link Erreur}. */
@@ -106,7 +127,7 @@ public class Urne {
                 yield commeProprietaire(
                         jeton,
                         m.getReferendum(),
-                        ref -> ref.definirElecteurs(m.getElecteursList()));
+                        ref -> ref.definirElecteurs(m.getElecteursList(), m.getEmailsMap()));
             }
             case DEFINIR_DATES -> {
                 var m = r.getDefinirDates();
@@ -143,8 +164,18 @@ public class Urne {
                             .build();
                 }
             }
-            case VALIDER ->
-                    commeProprietaire(jeton, r.getValider().getReferendum(), Referundum::valider);
+            case VALIDER -> valider(jeton, r.getValider().getReferendum());
+            case DEFINIR_SERVEUR_CERTIFICATION -> {
+                var m = r.getDefinirServeurCertification();
+                yield commeProprietaire(
+                        jeton,
+                        m.getReferendum(),
+                        ref ->
+                                ref.definirServeurCertification(
+                                        m.getAdresse(), m.getEmailOperateur()));
+            }
+            case DEMANDER_CREDENTIALS ->
+                    demanderCredentials(jeton, r.getDemanderCredentials().getReferendum());
             case SCELLER ->
                     commeProprietaire(jeton, r.getSceller().getReferendum(), Referundum::sceller);
             case OBTENIR_EMARGEMENT -> emargement(jeton, r.getObtenirEmargement().getReferendum());
@@ -302,6 +333,85 @@ public class Urne {
         return Reponse.newBuilder().setReferendums(liste).build();
     }
 
+    // ---- Serveur de credentials ----------------------------------------------------------------
+
+    /**
+     * Fait générer les credentials par le serveur de credentials. L'appel réseau se fait hors du
+     * verrou du référendum, qui reste lisible pendant ce temps.
+     */
+    private Reponse demanderCredentials(String jeton, String id) {
+        Referundum ref = proprietaire(jeton, id);
+        NouvelleDemande.Builder demande =
+                NouvelleDemande.newBuilder()
+                        .setReferendum(id)
+                        .setAdresseUrne(adressePublique == null ? "" : adressePublique);
+        String adresse;
+        synchronized (ref) {
+            ref.electeursAContacter()
+                    .forEach(
+                            (electeur, email) ->
+                                    demande.addElecteurs(
+                                            ElecteurAContacter.newBuilder()
+                                                    .setIdentifiant(electeur)
+                                                    .setEmail(email)));
+            demande.setQuestion(ref.question())
+                    .setJeton(ref.jetonAutorite())
+                    .setEmailOperateur(ref.serveurCertification().emailOperateur());
+            adresse = ref.serveurCertification().adresse();
+        }
+        CredentialsCertifies certifies;
+        try {
+            certifies = certification.demander(adresse, demande.build());
+        } catch (IOException e) {
+            throw new RequeteRefusee("Serveur de credentials injoignable : " + e.getMessage());
+        } catch (RefusException e) {
+            throw new RequeteRefusee("Refus du serveur de credentials : " + e.getMessage());
+        }
+        Map<String, BigInteger> parElecteur = new LinkedHashMap<>();
+        for (CredentialPublic c : certifies.getCredentialsList()) {
+            parElecteur.put(c.getElecteur(), entier(c.getCredential()));
+        }
+        synchronized (ref) {
+            ref.deposerCredentialsCertifies(parElecteur, certifies.getCertificat());
+        }
+        return ok();
+    }
+
+    /**
+     * Valide le référendum. Avec un serveur de credentials, celui-ci est prévenu d'abord : il
+     * envoie les credentials, et le référendum n'est validé que s'il l'a fait.
+     */
+    private Reponse valider(String jeton, String id) {
+        Referundum ref = proprietaire(jeton, id);
+        Referundum.ServeurCertification serveur;
+        synchronized (ref) {
+            serveur = ref.serveurCertification();
+            List<String> manques = ref.manques();
+            if (!manques.isEmpty()) {
+                throw new RequeteRefusee(
+                        "Impossible de valider, il manque : " + String.join(", ", manques));
+            }
+        }
+        if (serveur != null) {
+            try {
+                certification.valider(
+                        serveur.adresse(),
+                        ValidationCertification.newBuilder()
+                                .setReferendum(id)
+                                .setJeton(ref.jetonAutorite())
+                                .build());
+            } catch (IOException e) {
+                throw new RequeteRefusee("Serveur de credentials injoignable : " + e.getMessage());
+            } catch (RefusException e) {
+                throw new RequeteRefusee("Refus du serveur de credentials : " + e.getMessage());
+            }
+        }
+        synchronized (ref) {
+            ref.valider();
+        }
+        return ok();
+    }
+
     // ---- Partage à seuil -----------------------------------------------------------------------
 
     private Reponse deposerCleCanal(String jeton, DeposerCle m) {
@@ -390,6 +500,9 @@ public class Urne {
         synchronized (ref) {
             donnees.setReferendum(versPublic(ref));
             ref.credentialsPublics().forEach(c -> donnees.addCredentials(octets(c)));
+            if (ref.certificat() != null) {
+                donnees.setCertificat(ref.certificat());
+            }
             ref.bulletins().forEach(b -> donnees.addBulletins(versProto(b)));
             if (ref.total() != null) {
                 donnees.setTotal(versProto(ref.total()));

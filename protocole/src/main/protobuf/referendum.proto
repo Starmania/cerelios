@@ -93,6 +93,17 @@ message CredentialPublic {
   bytes credential = 2;
 }
 
+// Certificat signé par le serveur de credentials : il engage le serveur sur la liste publiée.
+// L'opérateur, qui seul connaît la graine, peut vérifier que les clés sont bien les siennes.
+message Certificat {
+  string referendum = 1;
+  int32 nombre_electeurs = 2;
+  bytes empreinte_credentials = 3; // SHA-256 des credentials publics triés
+  bytes cle_verification = 4;      // dérivée de la graine, vérifie la signature
+  bytes cle_chiffrement = 5;       // dérivée de la graine, chiffre les credentials stockés
+  PreuveSchnorr signature = 6;
+}
+
 message Resultat {
   int32 oui = 1;
   int32 non = 2;
@@ -127,6 +138,7 @@ message DonneesPubliques {
   repeated Bulletin bulletins = 3;
   Chiffre total = 4;               // absent avant le dépouillement
   repeated EvenementScellement scellements = 5;
+  Certificat certificat = 6; // présent si les credentials viennent d'un serveur de credentials
 }
 
 // ---- Requêtes ----------------------------------------------------------------------------------
@@ -148,6 +160,13 @@ message DefinirQuestion {
 message DefinirElecteurs {
   string referendum = 1;
   repeated string electeurs = 2;
+  map<string, string> emails = 3; // identifiant -> e-mail, requis avec un serveur de credentials
+}
+
+message DefinirServeurCertification {
+  string referendum = 1;
+  string adresse = 2;          // hôte:port du serveur de credentials
+  string email_operateur = 3;
 }
 
 message DefinirDates {
@@ -223,6 +242,8 @@ message Requete {
     Referendum supprimer = 23;
     Referendum lister_mes_referendums = 24;
     DefinirSeuil definir_seuil = 25;
+    DefinirServeurCertification definir_serveur_certification = 26;
+    Referendum demander_credentials = 27;
 
     DeposerCle deposer_cle = 30;
     DeposerDechiffrement deposer_dechiffrement = 31;

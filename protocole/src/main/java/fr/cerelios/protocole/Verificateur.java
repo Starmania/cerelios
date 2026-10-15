@@ -119,6 +119,15 @@ public final class Verificateur {
                             + donnees.getReferendum().getNombreElecteurs()
                             + ")");
         }
+        if (donnees.hasCertificat()) {
+            anomalies.addAll(
+                    Certificats.verifier(
+                            groupe,
+                            donnees.getCertificat(),
+                            donnees.getReferendum().getId(),
+                            credentials,
+                            donnees.getReferendum().getNombreElecteurs()));
+        }
         return credentials;
     }
 

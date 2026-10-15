@@ -20,6 +20,7 @@
         <module>gui</module>
         <module>scrutateur</module>
         <module>autorite</module>
+        <module>certification</module>
         <module>attaques</module>
     </modules>
 
@@ -62,6 +63,11 @@
             <dependency>
                 <groupId>fr.cerelios</groupId>
                 <artifactId>autorite</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>fr.cerelios</groupId>
+                <artifactId>certification</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

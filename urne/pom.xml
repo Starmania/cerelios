@@ -34,5 +34,10 @@
             <artifactId>autorite</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>fr.cerelios</groupId>
+            <artifactId>certification</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

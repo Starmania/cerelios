@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package cerelios;
+
+import "referendum.proto";
+
+option java_package = "fr.cerelios.protocole.messages";
+option java_multiple_files = true;
+
+// Échanges avec le serveur de credentials : l'urne demande puis valide, l'opérateur renvoie des
+// credentials et consulte ses crédits.
+
+message ElecteurAContacter {
+  string identifiant = 1;
+  string email = 2;
+}
+
+message NouvelleDemande {
+  string referendum = 1;
+  string question = 2;
+  repeated ElecteurAContacter electeurs = 3;
+  string email_operateur = 4;
+  string jeton = 5;        // jeton de l'autorité : seule l'urne qui le connaît pourra valider
+  string adresse_urne = 6; // hôte:port, pour retrouver qui n'a pas encore voté
+}
+
+message CredentialsCertifies {
+  repeated CredentialPublic credentials = 1;
+  Certificat certificat = 2;
+}
+
+message ValidationCertification {
+  string referendum = 1;
+  string jeton = 2;
+}
+
+message Renvoi {
+  string referendum = 1;
+  string graine = 2;
+  oneof cible {
+    Vide tous = 3;
+    Electeurs electeurs = 4;
+    Vide sans_bulletin = 5; // électeurs qui n'ont pas encore voté
+  }
+}
+
+message ConsulterCredits {
+  string referendum = 1;
+  string graine = 2;
+}
+
+message Credits {
+  int32 restants = 1;
+}
+
+message RequeteCertification {
+  oneof contenu {
+    NouvelleDemande demande = 1;
+    ValidationCertification validation = 2;
+    Renvoi renvoi = 3;
+    ConsulterCredits credits = 4;
+  }
+}
+
+message ReponseCertification {
+  oneof contenu {
+    Erreur erreur = 1;
+    CredentialsCertifies credentials = 2;
+    Vide ok = 3;
+    Credits credits = 4;
+  }
+}

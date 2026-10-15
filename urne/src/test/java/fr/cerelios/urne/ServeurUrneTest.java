@@ -4,8 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import fr.cerelios.autorite.AutoriteCertification;
+import fr.cerelios.autorite.OperateurCredentials;
+import fr.cerelios.certification.ServeurCertification;
+import fr.cerelios.certification.ServiceCertification;
 import fr.cerelios.crypto.Groupe;
 import fr.cerelios.electeur.Electeur;
+import fr.cerelios.protocole.ClientCertification;
 import fr.cerelios.protocole.ClientUrne;
 import fr.cerelios.protocole.MailJournal;
 import fr.cerelios.protocole.Verificateur;
@@ -14,6 +18,7 @@ import fr.cerelios.protocole.messages.CreerReferendum;
 import fr.cerelios.protocole.messages.Dates;
 import fr.cerelios.protocole.messages.DefinirDates;
 import fr.cerelios.protocole.messages.DefinirElecteurs;
+import fr.cerelios.protocole.messages.DefinirServeurCertification;
 import fr.cerelios.protocole.messages.DefinirSeuil;
 import fr.cerelios.protocole.messages.DonneesPubliques;
 import fr.cerelios.protocole.messages.Etat;
@@ -23,6 +28,7 @@ import fr.cerelios.protocole.messages.Referendum;
 import fr.cerelios.protocole.messages.ReferendumPublic;
 import fr.cerelios.protocole.messages.Requete;
 import fr.cerelios.scrutateur.Scrutateur;
+import java.net.ServerSocket;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -64,7 +70,20 @@ class ServeurUrneTest {
 
     @BeforeEach
     void demarrer() throws Exception {
-        serveur = new ServeurUrne(new Urne(idp, mail, horloge), 0);
+        // L'urne doit connaître son adresse avant d'écouter : on réserve un port libre.
+        int port;
+        try (ServerSocket libre = new ServerSocket(0)) {
+            port = libre.getLocalPort();
+        }
+        Urne urne =
+                new Urne(
+                        idp,
+                        mail,
+                        horloge,
+                        GROUPE,
+                        new ConnecteurCertification(),
+                        "localhost:" + port);
+        serveur = new ServeurUrne(urne, port);
         serveur.demarrer();
         admin = client();
         new Electeur(admin, GROUPE).connecter("alice", "mdp-alice");
@@ -183,7 +202,78 @@ class ServeurUrneTest {
         assertEquals(List.of(), new Verificateur(GROUPE).verifier(donneesPubliques()));
     }
 
+    @Test
+    void leServeurDeCredentialsEtSonOperateur() throws Exception {
+        try (ServeurCertification certification =
+                new ServeurCertification(new ServiceCertification(GROUPE, mail, 2), 0)) {
+            certification.demarrer();
+            admin.appeler(
+                    Requete.newBuilder()
+                            .setDefinirElecteurs(
+                                    DefinirElecteurs.newBuilder()
+                                            .setReferendum(id)
+                                            .addElecteurs("bob")
+                                            .addElecteurs("carol")
+                                            .putEmails("bob", "bob@exemple.fr")
+                                            .putEmails("carol", "carol@exemple.fr")));
+            admin.appeler(
+                    Requete.newBuilder()
+                            .setDefinirServeurCertification(
+                                    DefinirServeurCertification.newBuilder()
+                                            .setReferendum(id)
+                                            .setAdresse("localhost:" + certification.port())
+                                            .setEmailOperateur("op@exemple.fr")));
+            Path secret = dossier.resolve("S1.cle");
+            inscrireScrutateurs(1).getFirst().genererCle(secret);
+
+            admin.appeler(Requete.newBuilder().setDemanderCredentials(ref()));
+            // Rien n'est envoyé aux électeurs avant la validation.
+            assertEquals(0, recus("bob@exemple.fr").size());
+            admin.appeler(Requete.newBuilder().setValider(ref()));
+
+            String graine = champ("op@exemple.fr", "graine");
+            try (ClientCertification serveurCredentials =
+                            new ClientCertification("localhost", certification.port());
+                    ClientUrne urne = client()) {
+                OperateurCredentials operateur =
+                        new OperateurCredentials(serveurCredentials, urne, GROUPE, id, graine);
+                assertEquals(List.of(), operateur.verifierCertificat());
+
+                horloge.regleHorloge(OUVERTURE);
+                voter("bob", champ("bob@exemple.fr", "credential"), true);
+
+                // Carol a perdu son credential : l'opérateur relance qui n'a pas voté.
+                operateur.renvoyerSansBulletin();
+                assertEquals(
+                        1,
+                        recus("bob@exemple.fr").stream()
+                                .filter(m -> m.corps().contains("credential :"))
+                                .count());
+                assertEquals(2, recus("carol@exemple.fr").size());
+                assertEquals(3, operateur.creditsRestants());
+            }
+            voter("carol", champ("carol@exemple.fr", "credential"), false);
+
+            horloge.regleHorloge(CLOTURE);
+            Scrutateur s1 =
+                    new Scrutateur(client(), GROUPE, id, "S1", champ("s1@exemple.fr", "jeton"));
+            s1.dechiffrer(secret);
+            horloge.regleHorloge(PUBLICATION);
+
+            ReferendumPublic resultat = referendum();
+            assertEquals(Etat.PUBLIE, resultat.getEtat());
+            assertEquals(1, resultat.getResultat().getOui());
+            DonneesPubliques donnees = donneesPubliques();
+            assertTrue(donnees.hasCertificat());
+            assertEquals(List.of(), new Verificateur(GROUPE).verifier(donnees));
+        }
+    }
+
     // ---- Outils --------------------------------------------------------------------------------
+
+    private List<MailJournal.Mail> recus(String destinataire) {
+        return mail.envoyes().stream().filter(m -> m.destinataire().equals(destinataire)).toList();
+    }
 
     private ClientUrne client() throws Exception {
         return new ClientUrne("localhost", serveur.port());
@@ -254,13 +344,9 @@ class ServeurUrneTest {
         return Referendum.newBuilder().setReferendum(id);
     }
 
+    /** Champ {@code nom} du dernier e-mail reçu par {@code destinataire}. */
     private String champ(String destinataire, String nom) {
-        String corps =
-                mail.envoyes().stream()
-                        .filter(m -> m.destinataire().equals(destinataire))
-                        .findFirst()
-                        .orElseThrow()
-                        .corps();
+        String corps = recus(destinataire).getLast().corps();
         Matcher m = Pattern.compile(nom + " : (\\S+)").matcher(corps);
         assertTrue(m.find());
         return m.group(1);

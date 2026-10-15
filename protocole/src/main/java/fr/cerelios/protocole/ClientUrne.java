@@ -19,6 +19,17 @@ public class ClientUrne implements Closeable {
     private final OutputStream sortie;
     private String jeton = "";
 
+    /** Se connecte à une adresse {@code hôte:port}. */
+    public static ClientUrne vers(String adresse) throws IOException {
+        int separateur = adresse.lastIndexOf(':');
+        if (separateur <= 0) {
+            throw new IOException("Adresse attendue sous la forme hôte:port : " + adresse);
+        }
+        return new ClientUrne(
+                adresse.substring(0, separateur),
+                Integer.parseInt(adresse.substring(separateur + 1)));
+    }
+
     public ClientUrne(String hote, int port) throws IOException {
         socket = new Socket(hote, port);
         entree = socket.getInputStream();

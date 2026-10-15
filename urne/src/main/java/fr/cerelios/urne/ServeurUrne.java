@@ -1,5 +1,6 @@
 package fr.cerelios.urne;
 
+import fr.cerelios.crypto.Groupe;
 import fr.cerelios.protocole.MailJournal;
 import fr.cerelios.protocole.messages.Reponse;
 import fr.cerelios.protocole.messages.Requete;
@@ -83,13 +84,15 @@ public class ServeurUrne implements AutoCloseable {
     }
 
     /**
-     * Lance l'urne : {@code ServeurUrne <port> <comptes>}, où chaque ligne du fichier de comptes
-     * est {@code identifiant:email:motDePasse}. Ces comptes alimentent le fournisseur d'identité
-     * local, en attendant un vrai IdP.
+     * Lance l'urne : {@code ServeurUrne <port> <comptes> [adresse publique]}. Chaque ligne du
+     * fichier de comptes est {@code identifiant:email:motDePasse} ; ces comptes alimentent le
+     * fournisseur d'identité local, en attendant un vrai IdP. L'adresse publique ({@code
+     * hôte:port}) permet au serveur de credentials de joindre l'urne.
      */
     public static void main(String[] args) throws IOException {
-        if (args.length != 2) {
-            System.err.println("Usage : ServeurUrne <port> <fichier de comptes>");
+        if (args.length != 2 && args.length != 3) {
+            System.err.println(
+                    "Usage : ServeurUrne <port> <fichier de comptes> [adresse publique]");
             System.exit(2);
         }
         IdentitesLocales idp = new IdentitesLocales();
@@ -100,10 +103,15 @@ public class ServeurUrne implements AutoCloseable {
             String[] champs = ligne.split(":", 3);
             idp.inscrire(champs[0], champs[2], champs[1]);
         }
-        ServeurUrne serveur =
-                new ServeurUrne(
-                        new Urne(idp, new MailJournal(), Clock.systemUTC()),
-                        Integer.parseInt(args[0]));
+        Urne urne =
+                new Urne(
+                        idp,
+                        new MailJournal(),
+                        Clock.systemUTC(),
+                        Groupe.RFC_3526,
+                        new ConnecteurCertification(),
+                        args.length == 3 ? args[2] : null);
+        ServeurUrne serveur = new ServeurUrne(urne, Integer.parseInt(args[0]));
         serveur.demarrer();
         System.out.println("Urne à l'écoute sur le port " + serveur.port());
     }

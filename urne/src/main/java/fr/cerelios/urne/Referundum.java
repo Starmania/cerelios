@@ -10,7 +10,9 @@ import fr.cerelios.crypto.Partage;
 import fr.cerelios.crypto.Preuves.PreuveDechiffrement;
 import fr.cerelios.crypto.Preuves.PreuveSchnorr;
 import fr.cerelios.crypto.Preuves;
+import fr.cerelios.protocole.Certificats;
 import fr.cerelios.protocole.Contextes;
+import fr.cerelios.protocole.messages.Certificat;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -156,6 +158,10 @@ public class Referundum {
 
     // Lien électeur -> credential : secret, il relierait un bulletin à son électeur.
     private final Map<String, BigInteger> credentials = new HashMap<>();
+    // Adresses des électeurs, pour le serveur de credentials qui leur écrit.
+    private final Map<String, String> emails = new HashMap<>();
+    private ServeurCertification serveurCertification;
+    private Certificat certificat;
     private final Map<BigInteger, BulletinDepose> urne = new LinkedHashMap<>();
     private final Set<String> empreintes = new HashSet<>();
     private final Map<String, Instant> emargement = new LinkedHashMap<>();
@@ -377,6 +383,11 @@ public class Referundum {
     }
 
     public void definirElecteurs(List<String> liste) {
+        definirElecteurs(liste, Map.of());
+    }
+
+    /** Liste des électeurs et, pour ceux qui en ont, leur adresse e-mail. */
+    public void definirElecteurs(List<String> liste, Map<String, String> adresses) {
         exigerEtat(Etat.BROUILLON);
         if (!credentials.isEmpty()) {
             throw new RequeteRefusee("Les credentials sont déjà générés : liste figée");
@@ -393,6 +404,16 @@ public class Referundum {
         }
         electeurs.clear();
         electeurs.addAll(nouveaux);
+        emails.clear();
+        adresses.forEach(
+                (electeur, email) -> {
+                    String normalise = normaliser(electeur);
+                    if (!nouveaux.contains(normalise)) {
+                        throw new RequeteRefusee(
+                                "Adresse d'un électeur absent de la liste : " + electeur);
+                    }
+                    emails.put(normalise, email);
+                });
     }
 
     /** Fixe le calendrier ; toutes les dates sont obligatoires puisque rien n'est manuel. */
@@ -478,6 +499,9 @@ public class Referundum {
         }
         if (credentials.size() != electeurs.size() || electeurs.isEmpty()) {
             manques.add("Credentials de l'autorité de certification");
+        }
+        if (serveurCertification != null && !emails.keySet().containsAll(electeurs)) {
+            manques.add("Adresse e-mail de chaque électeur, pour le serveur de credentials");
         }
         if (scrutateurs.isEmpty()) {
             manques.add("Au moins un scrutateur");
@@ -674,6 +698,71 @@ public class Referundum {
     /** Enregistre un credential public par électeur, fournis par l'autorité de certification. */
     public void deposerCredentials(String jeton, Map<String, BigInteger> parElecteur) {
         exigerJetonAutorite(jeton);
+        if (serveurCertification != null) {
+            throw new RequeteRefusee("Les credentials viennent du serveur de credentials");
+        }
+        enregistrerCredentials(parElecteur);
+    }
+
+    // ---- Serveur de credentials ----------------------------------------------------------------
+
+    /** Adresse du serveur de credentials et e-mail de l'opérateur qui recevra la graine. */
+    public record ServeurCertification(String adresse, String emailOperateur) {}
+
+    /** Confie les credentials à un serveur de credentials plutôt qu'à une autorité manuelle. */
+    public void definirServeurCertification(String adresse, String emailOperateur) {
+        exigerEtat(Etat.BROUILLON);
+        if (!credentials.isEmpty()) {
+            throw new RequeteRefusee("Credentials déjà déposés");
+        }
+        if (adresse.isBlank() || !emailOperateur.contains("@")) {
+            throw new RequeteRefusee("Adresse du serveur ou e-mail de l'opérateur invalide");
+        }
+        serveurCertification = new ServeurCertification(adresse, emailOperateur);
+    }
+
+    public ServeurCertification serveurCertification() {
+        return serveurCertification;
+    }
+
+    /** Électeurs et leur adresse, à envoyer au serveur de credentials. */
+    public Map<String, String> electeursAContacter() {
+        exigerEtat(Etat.BROUILLON);
+        if (serveurCertification == null) {
+            throw new RequeteRefusee("Aucun serveur de credentials défini");
+        }
+        if (!credentials.isEmpty()) {
+            throw new RequeteRefusee("Credentials déjà déposés");
+        }
+        if (electeurs.isEmpty() || !emails.keySet().containsAll(electeurs)) {
+            throw new RequeteRefusee("Il faut une adresse e-mail pour chaque électeur");
+        }
+        Map<String, String> aContacter = new LinkedHashMap<>();
+        electeurs.forEach(e -> aContacter.put(e, emails.get(e)));
+        return aContacter;
+    }
+
+    /** Enregistre les credentials du serveur, après avoir vérifié son certificat. */
+    public void deposerCredentialsCertifies(
+            Map<String, BigInteger> parElecteur, Certificat certificat) {
+        if (serveurCertification == null) {
+            throw new RequeteRefusee("Aucun serveur de credentials défini");
+        }
+        List<String> anomalies =
+                Certificats.verifier(
+                        groupe, certificat, id, parElecteur.values(), electeurs.size());
+        if (!anomalies.isEmpty()) {
+            throw new RequeteRefusee("Certificat refusé : " + String.join(", ", anomalies));
+        }
+        enregistrerCredentials(parElecteur);
+        this.certificat = certificat;
+    }
+
+    public Certificat certificat() {
+        return certificat;
+    }
+
+    private void enregistrerCredentials(Map<String, BigInteger> parElecteur) {
         exigerEtat(Etat.BROUILLON);
         if (!credentials.isEmpty()) {
             throw new RequeteRefusee("Credentials déjà déposés");
@@ -736,6 +825,7 @@ public class Referundum {
     public void archiver() {
         exigerEtat(Etat.PUBLIE);
         electeurs.clear();
+        emails.clear();
         emargement.clear();
         // Les credentials publics restent pour l'audit, sans le nom de leur électeur.
         Map<String, BigInteger> anonymes = new HashMap<>();
