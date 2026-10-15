@@ -42,6 +42,19 @@ public final class Elgamal {
     }
 
     /**
+     * Reconstruit une paire à partir de sa partie secrète, relue par exemple dans le fichier d'un
+     * scrutateur ou dans le credential reçu par un électeur.
+     *
+     * @throws IllegalArgumentException si {@code x} n'est pas dans [1, q - 1]
+     */
+    public static PaireDeCles depuisSecrete(Groupe groupe, BigInteger x) {
+        if (x.signum() <= 0 || x.compareTo(groupe.q()) >= 0) {
+            throw new IllegalArgumentException("Partie secrète hors de [1, q - 1]");
+        }
+        return keyGen(groupe, x);
+    }
+
+    /**
      * Chiffre un vote 0 ou 1 avec la clé {@code y} du référendum. Le vote est placé en exposant
      * pour que le produit de deux chiffrés soit un chiffré de la somme des votes.
      */
@@ -55,7 +68,8 @@ public final class Elgamal {
         return encrypt(groupe, y, vote, groupe.tirerExposant(alea));
     }
 
-    private static Chiffre encrypt(Groupe groupe, BigInteger y, int vote, BigInteger r) {
+    /** Chiffre avec l'exposant {@code r} donné, que {@link Bulletin} garde pour sa preuve. */
+    static Chiffre encrypt(Groupe groupe, BigInteger y, int vote, BigInteger r) {
         if (vote != 0 && vote != 1) {
             throw new IllegalArgumentException("Le vote doit valoir 0 ou 1");
         }

@@ -1,6 +1,10 @@
 package fr.cerelios.crypto;
 
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import org.jetbrains.annotations.TestOnly;
 
@@ -28,6 +32,39 @@ public record Groupe(BigInteger p, BigInteger q, BigInteger g) {
 
     /** Groupe 14 de la RFC 3526 (2048 bits) : p = 2q + 1 et g = 2 est d'ordre q. */
     public static final Groupe RFC_3526 = new Groupe(P_2048, P_2048.shiftRight(1), BigInteger.TWO);
+
+    /**
+     * Vrai si {@code x} est dans le sous-groupe d'ordre q. Tout élément reçu d'un autre programme
+     * passe par ce test : hors du sous-groupe, un calcul avec un secret en révélerait une partie.
+     */
+    public boolean appartient(BigInteger x) {
+        return x.signum() > 0 && x.compareTo(p) < 0 && x.modPow(q, p).equals(BigInteger.ONE);
+    }
+
+    /**
+     * Défi d'une preuve non interactive (heuristique de Fiat-Shamir) : SHA-256 du domaine puis de
+     * chaque élément précédé de sa longueur, réduit modulo q. Le domaine sépare les types de
+     * preuve, pour qu'une preuve d'un type ne puisse pas resservir comme preuve d'un autre.
+     */
+    public BigInteger defi(String domaine, BigInteger... elements) {
+        MessageDigest sha256;
+        try {
+            sha256 = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 indisponible dans ce JDK", e);
+        }
+        ajouter(sha256, domaine.getBytes(StandardCharsets.UTF_8));
+        for (BigInteger element : elements) {
+            ajouter(sha256, element.toByteArray());
+        }
+        return new BigInteger(1, sha256.digest()).mod(q);
+    }
+
+    /** Longueur sur 4 octets puis contenu : deux suites différentes ne donnent pas les mêmes octets. */
+    private static void ajouter(MessageDigest sha256, byte[] octets) {
+        sha256.update(ByteBuffer.allocate(Integer.BYTES).putInt(octets.length).array());
+        sha256.update(octets);
+    }
 
     /** Tire un exposant uniformément dans [1, q - 1]. */
     public BigInteger tirerExposant() {
