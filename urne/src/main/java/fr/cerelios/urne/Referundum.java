@@ -1,25 +1,611 @@
 package fr.cerelios.urne;
 
+import fr.cerelios.crypto.Bulletin;
+import fr.cerelios.crypto.DechiffrementImpossibleException;
+import fr.cerelios.crypto.Elgamal.Chiffre;
+import fr.cerelios.crypto.Elgamal;
+import fr.cerelios.crypto.Groupe;
+import fr.cerelios.crypto.Preuves.PreuveDechiffrement;
+import fr.cerelios.crypto.Preuves.PreuveSchnorr;
+import fr.cerelios.crypto.Preuves;
+import fr.cerelios.protocole.Contextes;
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import org.jetbrains.annotations.TestOnly;
 
+/**
+ * Un référendum Oui/Non, de sa préparation à son archivage.
+ *
+ * <p>Aucune action ne fait avancer le référendum dans le temps : chaque lecture de {@link #etat()}
+ * applique les changements dus aux dates (ouverture, clôture, fin du délai de grâce, publication).
+ * Il n'y a donc ni tâche planifiée ni bouton « ouvrir » ou « publier ».
+ *
+ * <p>Les méthodes ne sont pas synchronisées : l'appelant ({@link Urne}) verrouille le référendum.
+ */
 public class Referundum {
 
-    private Instant dateFin;
-    Clock horloge;
+    private static final SecureRandom ALEA = new SecureRandom();
 
-    public Referundum(Instant dateFin) {
-        this(dateFin, Clock.systemUTC());
+    /** Scrutateur inscrit par l'administrateur, connu de l'urne par son jeton secret. */
+    public static final class Scrutateur {
+        private final String nom;
+        private final String email;
+        private final String jeton;
+        private BigInteger clePublique;
+        private PreuveSchnorr preuveCle;
+        private BigInteger dechiffrement;
+        private PreuveDechiffrement preuveDechiffrement;
+
+        private Scrutateur(String nom, String email, String jeton) {
+            this.nom = nom;
+            this.email = email;
+            this.jeton = jeton;
+        }
+
+        public String nom() {
+            return nom;
+        }
+
+        public String email() {
+            return email;
+        }
+
+        public BigInteger clePublique() {
+            return clePublique;
+        }
+
+        public PreuveSchnorr preuveCle() {
+            return preuveCle;
+        }
+
+        public BigInteger dechiffrement() {
+            return dechiffrement;
+        }
+
+        public PreuveDechiffrement preuveDechiffrement() {
+            return preuveDechiffrement;
+        }
     }
 
-    public boolean verifFini() {
-        return Instant.now(horloge).isAfter(dateFin);
+    /** Fermeture du calendrier : les dates ne peuvent plus changer. */
+    public record Scellement(
+            Instant date, Instant ouverture, Instant cloture, Instant publication) {}
+
+    /** Bulletin accepté, avec l'électeur qui l'a déposé. */
+    public record BulletinDepose(Bulletin bulletin, String electeur, Instant date) {}
+
+    public record Recepisse(String empreinte, boolean revote) {}
+
+    public record Resultat(int oui, int non) {}
+
+    private final String id;
+    private final Groupe groupe;
+    private final Clock horloge;
+    private final Instant creation;
+    private final Set<String> proprietaires = new LinkedHashSet<>();
+    private final String jetonAutorite = jeton();
+
+    private String question;
+    private Etat etat = Etat.BROUILLON;
+
+    // Électeurs, en minuscules pour qu'« Alice » et « alice » ne votent pas deux fois.
+    private final Set<String> electeurs = new LinkedHashSet<>();
+    private int nombreElecteurs;
+
+    private Instant ouverture;
+    private Instant cloture;
+    private Instant publication;
+    private Duration delaiGrace = Duration.ZERO;
+    private final List<Scellement> scellements = new ArrayList<>();
+
+    private final List<Scrutateur> scrutateurs = new ArrayList<>();
+    private BigInteger cle;
+
+    // Lien électeur -> credential : secret, il relierait un bulletin à son électeur.
+    private final Map<String, BigInteger> credentials = new HashMap<>();
+    private final Map<BigInteger, BulletinDepose> urne = new LinkedHashMap<>();
+    private final Set<String> empreintes = new HashSet<>();
+    private final Map<String, Instant> emargement = new LinkedHashMap<>();
+
+    private Chiffre total;
+    private Resultat resultat;
+    private Instant datePublication;
+    private Instant dateArchivage;
+
+    public Referundum(
+            String id, String question, String proprietaire, Groupe groupe, Clock horloge) {
+        this.id = id;
+        this.question = question;
+        this.groupe = groupe;
+        this.horloge = horloge;
+        this.creation = horloge.instant();
+        proprietaires.add(proprietaire);
     }
 
+    /** Référendum déjà validé qui se termine à {@code dateFin} : réservé aux tests. */
     @TestOnly
     Referundum(Instant dateFin, Clock horloge) {
-        this.dateFin = dateFin;
-        this.horloge = horloge;
+        this("test", "Question ?", "admin", Groupe.RFC_3526, horloge);
+        Instant maintenant = horloge.instant();
+        definirDates(maintenant, dateFin, dateFin, Duration.ZERO);
+        etat = Etat.VALIDE;
+    }
+
+    // ---- Lecture -------------------------------------------------------------------------------
+
+    public String id() {
+        return id;
+    }
+
+    public String question() {
+        return question;
+    }
+
+    public Groupe groupe() {
+        return groupe;
+    }
+
+    public Instant creation() {
+        return creation;
+    }
+
+    public boolean estProprietaire(String identifiant) {
+        return proprietaires.contains(identifiant);
+    }
+
+    public Instant ouverture() {
+        return ouverture;
+    }
+
+    public Instant cloture() {
+        return cloture;
+    }
+
+    public Instant publication() {
+        return publication;
+    }
+
+    public Duration delaiGrace() {
+        return delaiGrace;
+    }
+
+    public boolean scelle() {
+        return !scellements.isEmpty();
+    }
+
+    public List<Scellement> scellements() {
+        return List.copyOf(scellements);
+    }
+
+    public List<Scrutateur> scrutateurs() {
+        return List.copyOf(scrutateurs);
+    }
+
+    public BigInteger cle() {
+        return cle;
+    }
+
+    public int nombreElecteurs() {
+        return etat == Etat.BROUILLON ? electeurs.size() : nombreElecteurs;
+    }
+
+    public int nombreBulletins() {
+        return urne.size();
+    }
+
+    /** Credentials publiés, triés : l'ordre ne trahit pas celui de la liste des électeurs. */
+    public List<BigInteger> credentialsPublics() {
+        return credentials.values().stream().sorted().toList();
+    }
+
+    /** Bulletins publiés, triés par empreinte : l'ordre ne trahit pas l'heure du vote. */
+    public List<Bulletin> bulletins() {
+        return urne.values().stream()
+                .map(BulletinDepose::bulletin)
+                .sorted(Comparator.comparing(Bulletin::empreinte))
+                .toList();
+    }
+
+    /** Qui a voté et quand ; jamais pour quoi. Vide une fois archivé. */
+    public Map<String, Instant> emargement() {
+        return Map.copyOf(emargement);
+    }
+
+    public Chiffre total() {
+        return total;
+    }
+
+    public Resultat resultat() {
+        return resultat;
+    }
+
+    public Instant datePublication() {
+        return datePublication;
+    }
+
+    public Instant dateArchivage() {
+        return dateArchivage;
+    }
+
+    /** Vrai une fois la date de clôture passée. */
+    public boolean verifFini() {
+        return cloture != null && Instant.now(horloge).isAfter(cloture);
+    }
+
+    // ---- Transitions paresseuses ---------------------------------------------------------------
+
+    /** État courant, après application des changements dus aux dates. */
+    public Etat etat() {
+        Instant maintenant = horloge.instant();
+        Etat avant;
+        do {
+            avant = etat;
+            switch (etat) {
+                case VALIDE -> {
+                    if (!maintenant.isBefore(ouverture)) {
+                        etat = Etat.OUVERT;
+                    }
+                }
+                case OUVERT -> {
+                    if (!maintenant.isBefore(cloture)) {
+                        etat = Etat.CLOS;
+                    }
+                }
+                case CLOS -> {
+                    // Le total n'est calculé qu'après le délai de grâce : plus aucun bulletin
+                    // ne peut arriver.
+                    if (!maintenant.isBefore(cloture.plus(delaiGrace))) {
+                        total = agregerUrne();
+                        etat = Etat.DEPOUILLEMENT;
+                    }
+                }
+                case DEPOUILLEMENT -> {
+                    if (!maintenant.isBefore(publication) && tousLesDechiffrementsSontLa()) {
+                        publier(maintenant);
+                    }
+                }
+                default -> {}
+            }
+        } while (etat != avant);
+        return etat;
+    }
+
+    private Chiffre agregerUrne() {
+        Chiffre somme = new Chiffre(BigInteger.ONE, BigInteger.ONE);
+        for (BulletinDepose depose : urne.values()) {
+            somme = Elgamal.agrege(groupe, somme, depose.bulletin().chiffre());
+        }
+        return somme;
+    }
+
+    private boolean tousLesDechiffrementsSontLa() {
+        return scrutateurs.stream().allMatch(s -> s.dechiffrement != null);
+    }
+
+    private void publier(Instant maintenant) {
+        List<BigInteger> partiels = scrutateurs.stream().map(s -> s.dechiffrement).toList();
+        try {
+            int oui = Elgamal.decrypt(groupe, total, partiels, nombreElecteurs);
+            resultat = new Resultat(oui, urne.size() - oui);
+            datePublication = maintenant;
+            etat = Etat.PUBLIE;
+        } catch (DechiffrementImpossibleException e) {
+            // Impossible si chaque déchiffrement partiel a passé sa preuve : on ne publie rien,
+            // les auditeurs verront l'incohérence dans les données publiques.
+            System.getLogger(Referundum.class.getName())
+                    .log(System.Logger.Level.ERROR, "Dépouillement impossible de " + id, e);
+        }
+    }
+
+    // ---- Préparation (administrateur) ----------------------------------------------------------
+
+    public void ajouterProprietaire(String identifiant) {
+        proprietaires.add(identifiant);
+    }
+
+    public void definirQuestion(String question) {
+        exigerEtat(Etat.BROUILLON);
+        if (question.isBlank()) {
+            throw new RequeteRefusee("La question est vide");
+        }
+        this.question = question;
+    }
+
+    public void definirElecteurs(List<String> liste) {
+        exigerEtat(Etat.BROUILLON);
+        if (!credentials.isEmpty()) {
+            throw new RequeteRefusee("Les credentials sont déjà générés : liste figée");
+        }
+        Set<String> nouveaux = new LinkedHashSet<>();
+        for (String electeur : liste) {
+            String normalise = normaliser(electeur);
+            if (normalise.isEmpty()) {
+                throw new RequeteRefusee("Identifiant d'électeur vide");
+            }
+            if (!nouveaux.add(normalise)) {
+                throw new RequeteRefusee("Électeur en double : " + electeur);
+            }
+        }
+        electeurs.clear();
+        electeurs.addAll(nouveaux);
+    }
+
+    /** Fixe le calendrier ; toutes les dates sont obligatoires puisque rien n'est manuel. */
+    public void definirDates(
+            Instant ouverture, Instant cloture, Instant publication, Duration delaiGrace) {
+        if (scelle()) {
+            throw new RequeteRefusee("Référendum scellé : dates figées");
+        }
+        Etat courant = etat();
+        if (courant != Etat.BROUILLON && courant != Etat.VALIDE && courant != Etat.OUVERT) {
+            throw new RequeteRefusee("Dates figées une fois le vote clos");
+        }
+        if (!ouverture.isBefore(cloture) || publication.isBefore(cloture)) {
+            throw new RequeteRefusee("Il faut ouverture < clôture ≤ publication");
+        }
+        if (delaiGrace.isNegative()) {
+            throw new RequeteRefusee("Délai de grâce négatif");
+        }
+        if (courant == Etat.OUVERT && !ouverture.equals(this.ouverture)) {
+            throw new RequeteRefusee("Vote déjà ouvert : la date d'ouverture ne change plus");
+        }
+        this.ouverture = ouverture;
+        this.cloture = cloture;
+        this.publication = publication;
+        this.delaiGrace = delaiGrace;
+    }
+
+    /** Inscrit un scrutateur et rend son jeton secret, à lui transmettre. */
+    public String ajouterScrutateur(String nom, String email) {
+        exigerEtat(Etat.BROUILLON);
+        if (nom.isBlank() || scrutateurs.stream().anyMatch(s -> s.nom.equals(nom))) {
+            throw new RequeteRefusee("Nom de scrutateur vide ou déjà pris : " + nom);
+        }
+        Scrutateur scrutateur = new Scrutateur(nom, email, jeton());
+        scrutateurs.add(scrutateur);
+        return scrutateur.jeton;
+    }
+
+    /** Jeton à transmettre à l'autorité de certification. */
+    public String jetonAutorite() {
+        return jetonAutorite;
+    }
+
+    /** Ce qui manque avant de pouvoir valider ; vide si tout est prêt. */
+    public List<String> manques() {
+        List<String> manques = new ArrayList<>();
+        if (etat() != Etat.BROUILLON) {
+            manques.add("Le référendum n'est plus un brouillon");
+            return manques;
+        }
+        if (question.isBlank()) {
+            manques.add("Question");
+        }
+        if (electeurs.isEmpty()) {
+            manques.add("Liste des électeurs");
+        }
+        if (credentials.size() != electeurs.size() || electeurs.isEmpty()) {
+            manques.add("Credentials de l'autorité de certification");
+        }
+        if (scrutateurs.isEmpty()) {
+            manques.add("Au moins un scrutateur");
+        }
+        for (Scrutateur s : scrutateurs) {
+            if (s.clePublique == null) {
+                manques.add("Clé du scrutateur " + s.nom);
+            }
+        }
+        if (ouverture == null) {
+            manques.add("Dates d'ouverture, de clôture et de publication");
+        } else if (!horloge.instant().isBefore(cloture)) {
+            manques.add("Date de clôture déjà passée");
+        }
+        return manques;
+    }
+
+    /** Fige le référendum : questions, électeurs, credentials et scrutateurs ne changent plus. */
+    public void valider() {
+        List<String> manques = manques();
+        if (!manques.isEmpty()) {
+            throw new RequeteRefusee(
+                    "Impossible de valider, il manque : " + String.join(", ", manques));
+        }
+        cle =
+                scrutateurs.stream()
+                        .map(s -> s.clePublique)
+                        .reduce(BigInteger.ONE, (a, b) -> a.multiply(b).mod(groupe.p()));
+        nombreElecteurs = electeurs.size();
+        etat = Etat.VALIDE;
+    }
+
+    /** Scelle le calendrier : les dates sont inscrites au journal de scellement et figées. */
+    public void sceller() {
+        if (etat() == Etat.BROUILLON) {
+            throw new RequeteRefusee("Valider le référendum avant de le sceller");
+        }
+        if (scelle()) {
+            throw new RequeteRefusee("Déjà scellé");
+        }
+        scellements.add(new Scellement(horloge.instant(), ouverture, cloture, publication));
+    }
+
+    // ---- Scrutateurs ---------------------------------------------------------------------------
+
+    public Scrutateur scrutateurParJeton(String jeton) {
+        return scrutateurs.stream()
+                .filter(s -> memeJeton(s.jeton, jeton))
+                .findFirst()
+                .orElseThrow(() -> new RequeteRefusee("Jeton de scrutateur inconnu"));
+    }
+
+    public void deposerCle(String jeton, BigInteger clePublique, PreuveSchnorr preuve) {
+        exigerEtat(Etat.BROUILLON);
+        Scrutateur s = scrutateurParJeton(jeton);
+        if (s.clePublique != null) {
+            throw new RequeteRefusee("Clé déjà déposée");
+        }
+        if (clePublique.equals(BigInteger.ONE)
+                || !Preuves.verifierConnaissance(
+                        groupe, clePublique, preuve, Contextes.cleScrutateur(id, s.nom))) {
+            throw new RequeteRefusee("Preuve de connaissance de la clé invalide");
+        }
+        s.clePublique = clePublique;
+        s.preuveCle = preuve;
+    }
+
+    public void deposerDechiffrement(String jeton, BigInteger partiel, PreuveDechiffrement preuve) {
+        Scrutateur s = scrutateurParJeton(jeton);
+        exigerEtat(Etat.DEPOUILLEMENT);
+        if (s.dechiffrement != null) {
+            throw new RequeteRefusee("Déchiffrement déjà déposé");
+        }
+        if (!Preuves.verifierDechiffrement(
+                groupe,
+                s.clePublique,
+                total,
+                partiel,
+                preuve,
+                Contextes.dechiffrement(id, s.nom))) {
+            throw new RequeteRefusee("Preuve de déchiffrement invalide");
+        }
+        s.dechiffrement = partiel;
+        s.preuveDechiffrement = preuve;
+        etat();
+    }
+
+    // ---- Autorité de certification -------------------------------------------------------------
+
+    public List<String> electeursPourAutorite(String jeton) {
+        exigerJetonAutorite(jeton);
+        return List.copyOf(electeurs);
+    }
+
+    /** Enregistre un credential public par électeur, fournis par l'autorité de certification. */
+    public void deposerCredentials(String jeton, Map<String, BigInteger> parElecteur) {
+        exigerJetonAutorite(jeton);
+        exigerEtat(Etat.BROUILLON);
+        if (!credentials.isEmpty()) {
+            throw new RequeteRefusee("Credentials déjà déposés");
+        }
+        Map<String, BigInteger> normalises = new HashMap<>();
+        parElecteur.forEach(
+                (electeur, credential) -> normalises.put(normaliser(electeur), credential));
+        if (!normalises.keySet().equals(electeurs)) {
+            throw new RequeteRefusee("Il faut exactement un credential par électeur de la liste");
+        }
+        Set<BigInteger> distincts = new HashSet<>();
+        for (BigInteger credential : normalises.values()) {
+            if (!groupe.appartient(credential)
+                    || credential.equals(BigInteger.ONE)
+                    || !distincts.add(credential)) {
+                throw new RequeteRefusee("Credential invalide ou en double");
+            }
+        }
+        credentials.putAll(normalises);
+    }
+
+    // ---- Vote ----------------------------------------------------------------------------------
+
+    /**
+     * Dépose le bulletin de {@code electeur}, connecté à l'instant {@code connexion}. Un nouveau
+     * bulletin du même électeur remplace le précédent.
+     */
+    public Recepisse deposerBulletin(String electeur, Instant connexion, Bulletin bulletin) {
+        Etat courant = etat();
+        boolean dansLaGrace = courant == Etat.CLOS && !connexion.isAfter(cloture);
+        if (courant != Etat.OUVERT && !dansLaGrace) {
+            throw new RequeteRefusee("Le vote n'est pas ouvert");
+        }
+        String normalise = normaliser(electeur);
+        if (!electeurs.contains(normalise)) {
+            throw new RequeteRefusee("Vous n'êtes pas sur la liste des électeurs");
+        }
+        String empreinte = bulletin.empreinte();
+        if (empreintes.contains(empreinte)) {
+            throw new RequeteRefusee("Bulletin déjà reçu");
+        }
+        if (!bulletin.estValide(groupe, cle, id)) {
+            throw new RequeteRefusee("Bulletin mal formé : preuve ou signature invalide");
+        }
+        if (!bulletin.credential().equals(credentials.get(normalise))) {
+            throw new RequeteRefusee("Ce credential n'est pas le vôtre");
+        }
+        Instant maintenant = horloge.instant();
+        BulletinDepose precedent =
+                urne.put(
+                        bulletin.credential(), new BulletinDepose(bulletin, normalise, maintenant));
+        empreintes.add(empreinte);
+        emargement.put(normalise, maintenant);
+        return new Recepisse(empreinte, precedent != null);
+    }
+
+    // ---- Fin de vie ----------------------------------------------------------------------------
+
+    /** Efface les données personnelles (électeurs, émargement) et garde le résultat. */
+    public void archiver() {
+        exigerEtat(Etat.PUBLIE);
+        electeurs.clear();
+        emargement.clear();
+        // Les credentials publics restent pour l'audit, sans le nom de leur électeur.
+        Map<String, BigInteger> anonymes = new HashMap<>();
+        int i = 0;
+        for (BigInteger credential : credentials.values()) {
+            anonymes.put("#" + i++, credential);
+        }
+        credentials.clear();
+        credentials.putAll(anonymes);
+        urne.replaceAll((c, d) -> new BulletinDepose(d.bulletin(), null, d.date()));
+        dateArchivage = horloge.instant();
+        etat = Etat.ARCHIVE;
+    }
+
+    // ---- Outils --------------------------------------------------------------------------------
+
+    private void exigerEtat(Etat attendu) {
+        Etat courant = etat();
+        if (courant != attendu) {
+            throw new RequeteRefusee("Action impossible dans l'état " + courant);
+        }
+    }
+
+    private void exigerJetonAutorite(String jeton) {
+        if (!memeJeton(jetonAutorite, jeton)) {
+            throw new RequeteRefusee("Jeton de l'autorité de certification invalide");
+        }
+    }
+
+    private static String normaliser(String identifiant) {
+        return identifiant.strip().toLowerCase(Locale.ROOT);
+    }
+
+    /** Comparaison en temps constant : la durée ne dit pas combien de caractères sont justes. */
+    static boolean memeJeton(String attendu, String recu) {
+        return recu != null
+                && MessageDigest.isEqual(
+                        attendu.getBytes(StandardCharsets.UTF_8),
+                        recu.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Jeton aléatoire de 128 bits, en base64 sans remplissage. */
+    static String jeton() {
+        byte[] octets = new byte[16];
+        ALEA.nextBytes(octets);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(octets);
     }
 }
