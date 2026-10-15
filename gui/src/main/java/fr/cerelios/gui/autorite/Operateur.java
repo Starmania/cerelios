@@ -63,7 +63,7 @@ public final class Operateur {
                     if (anomalies.isEmpty()) {
                         statut.succes(
                                 "Certificat valide : il vient de votre graine et couvre les"
-                                    + " credentials publiés.");
+                                        + " credentials publiés.");
                     } else {
                         statut.erreur(String.join(" · ", anomalies));
                     }

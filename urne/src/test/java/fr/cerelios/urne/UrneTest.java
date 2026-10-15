@@ -8,9 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import fr.cerelios.crypto.Bulletin;
+import fr.cerelios.crypto.Elgamal;
 import fr.cerelios.crypto.Elgamal.Chiffre;
 import fr.cerelios.crypto.Elgamal.PaireDeCles;
-import fr.cerelios.crypto.Elgamal;
 import fr.cerelios.crypto.Groupe;
 import fr.cerelios.crypto.Preuves;
 import fr.cerelios.protocole.Contextes;

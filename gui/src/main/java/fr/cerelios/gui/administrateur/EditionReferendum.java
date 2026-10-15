@@ -246,7 +246,7 @@ final class EditionReferendum {
         if (Ui.confirmer(
                 contexte,
                 "Après validation, la question, les électeurs, les scrutateurs et les credentials"
-                    + " ne pourront plus changer. Valider ?")) {
+                        + " ne pourront plus changer. Valider ?")) {
             agir(() -> admin.valider(id), "Référendum validé.");
         }
     }
@@ -276,7 +276,7 @@ final class EditionReferendum {
         if (Ui.confirmer(
                 contexte,
                 "L'archivage efface la liste des électeurs et l'émargement ; le résultat reste"
-                    + " publié. Archiver ?")) {
+                        + " publié. Archiver ?")) {
             agir(() -> admin.archiver(id), "Référendum archivé.");
         }
     }

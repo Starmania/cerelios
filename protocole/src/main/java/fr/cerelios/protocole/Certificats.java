@@ -4,8 +4,8 @@ import static fr.cerelios.protocole.Conversions.entier;
 import static fr.cerelios.protocole.Conversions.octets;
 
 import com.google.protobuf.ByteString;
-import fr.cerelios.crypto.Elgamal.PaireDeCles;
 import fr.cerelios.crypto.Elgamal;
+import fr.cerelios.crypto.Elgamal.PaireDeCles;
 import fr.cerelios.crypto.Groupe;
 import fr.cerelios.crypto.Preuves;
 import fr.cerelios.protocole.messages.Certificat;

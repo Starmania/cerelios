@@ -4,8 +4,8 @@ import static fr.cerelios.protocole.Conversions.entier;
 import static fr.cerelios.protocole.Conversions.octets;
 
 import fr.cerelios.crypto.ChiffrementHybride;
-import fr.cerelios.crypto.Elgamal.PaireDeCles;
 import fr.cerelios.crypto.Elgamal;
+import fr.cerelios.crypto.Elgamal.PaireDeCles;
 import fr.cerelios.crypto.Groupe;
 import fr.cerelios.protocole.Certificats;
 import fr.cerelios.protocole.ClientUrne;

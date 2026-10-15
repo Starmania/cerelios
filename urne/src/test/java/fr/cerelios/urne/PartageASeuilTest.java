@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import fr.cerelios.crypto.ChiffrementHybride;
-import fr.cerelios.crypto.Elgamal.PaireDeCles;
 import fr.cerelios.crypto.Elgamal;
+import fr.cerelios.crypto.Elgamal.PaireDeCles;
 import fr.cerelios.crypto.Groupe;
 import fr.cerelios.crypto.Partage;
 import fr.cerelios.crypto.Preuves;
