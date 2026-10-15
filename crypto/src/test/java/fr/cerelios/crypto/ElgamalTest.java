@@ -140,7 +140,8 @@ class ElgamalTest {
     }
 
     @Test
-    void leDechiffrementDeLAgregatDeNBulletinsEstLaSommeDesNVotes() throws DechiffrementImpossibleException {
+    void leDechiffrementDeLAgregatDeNBulletinsEstLaSommeDesNVotes()
+            throws DechiffrementImpossibleException {
         PaireDeCles cles = Elgamal.keyGen(GROUPE);
         int[] votes = {1, 0, 1, 1, 0, 1};
 
@@ -164,7 +165,8 @@ class ElgamalTest {
     }
 
     @Test
-    void decryptRetrouveLaSommeDesVotesAPlusieursScrutateurs() throws DechiffrementImpossibleException {
+    void decryptRetrouveLaSommeDesVotesAPlusieursScrutateurs()
+            throws DechiffrementImpossibleException {
         PaireDeCles a = Elgamal.keyGen(GROUPE);
         PaireDeCles b = Elgamal.keyGen(GROUPE);
         BigInteger y = a.publique().multiply(b.publique()).mod(GROUPE.p());
@@ -201,7 +203,8 @@ class ElgamalTest {
     }
 
     @Test
-    void leDechiffrementPartielVautUPuissanceLaPartSecrete() throws DechiffrementImpossibleException {
+    void leDechiffrementPartielVautUPuissanceLaPartSecrete()
+            throws DechiffrementImpossibleException {
         PaireDeCles cles = Elgamal.keyGen(GROUPE, aleaFixe(0x01));
         Chiffre chiffre = Elgamal.encrypt(GROUPE, cles.publique(), 1, aleaFixe(0x42));
 
@@ -220,7 +223,9 @@ class ElgamalTest {
         return chiffre.v().multiply(chiffre.u().modPow(x, p).modInverse(p)).mod(p);
     }
 
-    /** Chiffre chaque vote avec {@code y} puis agrège les chiffrés, en partant du chiffré neutre. */
+    /**
+     * Chiffre chaque vote avec {@code y} puis agrège les chiffrés, en partant du chiffré neutre.
+     */
     private static Chiffre totalChiffre(BigInteger y, int... votes) {
         Chiffre total = new Chiffre(BigInteger.ONE, BigInteger.ONE);
         for (int vote : votes) {

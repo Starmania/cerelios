@@ -12,10 +12,11 @@ class ExampleTest {
     @Test
     void serializeAndDeserializeMessage() throws Exception {
         BigInteger number = BigInteger.TWO.pow(2048).subtract(BigInteger.ONE);
-        Example message = Example.newBuilder()
-                .setText("Hello world \uD83D\uDE00")
-                .setBigInt(ByteString.copyFrom(number.toByteArray()))
-                .build();
+        Example message =
+                Example.newBuilder()
+                        .setText("Hello world \uD83D\uDE00")
+                        .setBigInt(ByteString.copyFrom(number.toByteArray()))
+                        .build();
 
         Example recu = Example.parseFrom(message.toByteArray());
 

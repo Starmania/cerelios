@@ -1,5 +1,6 @@
 package fr.cerelios.gui.controller;
 
+import java.util.function.Consumer;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -9,8 +10,6 @@ import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
-
-import java.util.function.Consumer;
 
 /** Écran de connexion : identifiant + mot de passe + bouton. */
 public class ConnexionController {

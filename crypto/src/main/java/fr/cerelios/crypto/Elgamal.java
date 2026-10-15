@@ -74,7 +74,8 @@ public final class Elgamal {
             throw new IllegalArgumentException("Le vote doit valoir 0 ou 1");
         }
         BigInteger p = groupe.p();
-        // Avec une clé hors du sous-groupe d'ordre q (1 ou p - 1 par exemple), v révélerait le vote.
+        // Avec une clé hors du sous-groupe d'ordre q (1 ou p - 1 par exemple), v révélerait le
+        // vote.
         if (y.compareTo(BigInteger.ONE) <= 0
                 || y.compareTo(p) >= 0
                 || !y.modPow(groupe.q(), p).equals(BigInteger.ONE)) {
@@ -85,8 +86,8 @@ public final class Elgamal {
     }
 
     /**
-     * Agrège deux chiffrés en (u × u′ mod p, v × v′ mod p), qui chiffre la somme de leurs votes.
-     * Le calcul n'utilise aucun secret : chacun peut le refaire à partir des bulletins publiés.
+     * Agrège deux chiffrés en (u × u′ mod p, v × v′ mod p), qui chiffre la somme de leurs votes. Le
+     * calcul n'utilise aucun secret : chacun peut le refaire à partir des bulletins publiés.
      */
     public static Chiffre agrege(Groupe groupe, Chiffre a, Chiffre b) {
         // Les chiffrés ne sont pas vérifiés : un seul hors du groupe, (0, 0) par exemple, rend

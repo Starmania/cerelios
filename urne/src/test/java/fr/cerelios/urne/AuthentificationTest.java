@@ -25,8 +25,7 @@ class AuthentificationTest {
         authentification.inscrire("alice", "s3cret");
 
         assertThrows(
-                IllegalArgumentException.class,
-                () -> authentification.inscrire("alice", "autre"));
+                IllegalArgumentException.class, () -> authentification.inscrire("alice", "autre"));
         assertTrue(authentification.verifier("alice", "s3cret"));
         assertFalse(authentification.verifier("alice", "autre"));
     }
