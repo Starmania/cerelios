@@ -2,6 +2,7 @@ package fr.cerelios.crypto;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
+import java.util.List;
 import org.jetbrains.annotations.TestOnly;
 
 /** Chiffrement Elgamal homomorphe. */
@@ -67,5 +68,41 @@ public final class Elgamal {
         }
         BigInteger gVote = vote == 1 ? groupe.g() : BigInteger.ONE;
         return new Chiffre(groupe.g().modPow(r, p), gVote.multiply(y.modPow(r, p)).mod(p));
+    }
+
+    /**
+     * Déchiffrement partiel d'un scrutateur : u^x mod p, calculé avec sa part secrète {@code x}. Il
+     * ne suffit pas à déchiffrer tant qu'il manque la part d'un autre scrutateur.
+     */
+    public static BigInteger dechiffrementPartiel(Groupe groupe, Chiffre chiffre, BigInteger x) {
+        // u n'est pas vérifié : hors du sous-groupe d'ordre q, u^x révélerait la parité de x.
+        return chiffre.u().modPow(x, groupe.p());
+    }
+
+    /**
+     * Combine les déchiffrements partiels de tous les scrutateurs et retrouve la somme des votes :
+     * g^somme = v / (produit des u^x) mod p, la somme étant cherchée de 0 à {@code borne}.
+     *
+     * @throws IllegalArgumentException si aucune somme ne convient : il manque une part, une part
+     *     est fausse ou le chiffré dépasse la borne
+     */
+    public static int decrypt(
+            Groupe groupe, Chiffre chiffre, List<BigInteger> partiels, int borne) {
+        BigInteger p = groupe.p();
+        BigInteger masque =
+                partiels.stream().reduce(BigInteger.ONE, (a, b) -> a.multiply(b).mod(p));
+        if (masque.signum() == 0) {
+            throw new IllegalArgumentException("Déchiffrement partiel nul modulo p");
+        }
+        BigInteger gSomme = chiffre.v().multiply(masque.modInverse(p)).mod(p);
+        // Recherche exhaustive : suffit tant que la borne est le nombre de bulletins reçus.
+        BigInteger puissance = BigInteger.ONE;
+        for (int somme = 0; somme <= borne; somme++) {
+            if (puissance.equals(gSomme)) {
+                return somme;
+            }
+            puissance = puissance.multiply(groupe.g()).mod(p);
+        }
+        throw new IllegalArgumentException("Aucune somme entre 0 et " + borne + " ne correspond");
     }
 }
