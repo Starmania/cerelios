@@ -1,0 +1,261 @@
+syntax = "proto3";
+
+package cerelios;
+
+option java_package = "fr.cerelios.protocole.messages";
+option java_multiple_files = true;
+
+// Les grands entiers (éléments du groupe, exposants) sont en complément à deux, gros-boutiste :
+// les octets de BigInteger.toByteArray(). Les instants sont en millisecondes depuis l'époque Unix.
+
+// ---- Cryptographie -----------------------------------------------------------------------------
+
+message Chiffre {
+  bytes u = 1;
+  bytes v = 2;
+}
+
+message PreuveSchnorr {
+  bytes defi = 1;
+  bytes reponse = 2;
+}
+
+message PreuveZeroOuUn {
+  bytes defi0 = 1;
+  bytes reponse0 = 2;
+  bytes defi1 = 3;
+  bytes reponse1 = 4;
+}
+
+message PreuveDechiffrement {
+  bytes defi = 1;
+  bytes reponse = 2;
+}
+
+message Bulletin {
+  bytes credential = 1;
+  Chiffre chiffre = 2;
+  PreuveZeroOuUn preuve = 3;
+  PreuveSchnorr signature = 4;
+}
+
+// ---- Référendum --------------------------------------------------------------------------------
+
+enum Etat {
+  ETAT_INCONNU = 0;
+  BROUILLON = 1;     // en préparation par l'administrateur
+  VALIDE = 2;        // figé, en attente de l'ouverture
+  OUVERT = 3;        // les électeurs votent
+  CLOS = 4;          // fermé, délai de grâce en cours
+  DEPOUILLEMENT = 5; // total chiffré calculé, attend les déchiffrements partiels
+  PUBLIE = 6;        // résultat publié
+  ARCHIVE = 7;       // données personnelles effacées, résultat conservé
+}
+
+message Dates {
+  int64 ouverture = 1;
+  int64 cloture = 2;
+  int64 publication = 3;
+  int64 delai_grace = 4; // en millisecondes
+}
+
+message ScrutateurPublic {
+  string nom = 1;
+  bytes cle_publique = 2;           // vide tant que la clé n'est pas déposée
+  PreuveSchnorr preuve_cle = 3;
+  bytes dechiffrement = 4;          // vide tant que le déchiffrement n'est pas déposé
+  PreuveDechiffrement preuve_dechiffrement = 5;
+}
+
+message CredentialPublic {
+  string electeur = 1;
+  bytes credential = 2;
+}
+
+message Resultat {
+  int32 oui = 1;
+  int32 non = 2;
+}
+
+message EvenementScellement {
+  int64 date = 1;
+  Dates dates = 2;
+}
+
+// Ce que tout le monde peut lire d'un référendum.
+message ReferendumPublic {
+  string id = 1;
+  string question = 2;
+  Etat etat = 3;
+  Dates dates = 4;
+  bytes cle = 5;                   // clé du référendum, produit des clés des scrutateurs
+  int32 nombre_electeurs = 6;
+  int32 nombre_bulletins = 7;
+  repeated ScrutateurPublic scrutateurs = 8;
+  Resultat resultat = 9;           // absent avant la publication
+  bool scelle = 10;
+}
+
+// Tout ce qu'il faut à un auditeur pour refaire les vérifications.
+// Les credentials y sont publiés sans le nom de leur électeur : avec ce lien, chacun pourrait
+// rattacher un bulletin à son électeur. Seule l'urne le garde, pour vérifier qui vote.
+message DonneesPubliques {
+  ReferendumPublic referendum = 1;
+  repeated bytes credentials = 2;
+  repeated Bulletin bulletins = 3;
+  Chiffre total = 4;               // absent avant le dépouillement
+  repeated EvenementScellement scellements = 5;
+}
+
+// ---- Requêtes ----------------------------------------------------------------------------------
+
+message Connexion {
+  string identifiant = 1;
+  string secret = 2; // transmis au fournisseur d'identité, jamais conservé
+}
+
+message CreerReferendum {
+  string question = 1;
+}
+
+message DefinirQuestion {
+  string referendum = 1;
+  string question = 2;
+}
+
+message DefinirElecteurs {
+  string referendum = 1;
+  repeated string electeurs = 2;
+}
+
+message DefinirDates {
+  string referendum = 1;
+  Dates dates = 2;
+}
+
+message AjouterScrutateur {
+  string referendum = 1;
+  string nom = 2;
+  string email = 3;
+}
+
+message AjouterProprietaire {
+  string referendum = 1;
+  string identifiant = 2;
+}
+
+message Referendum {
+  string referendum = 1;
+}
+
+message DeposerCle {
+  string referendum = 1;
+  bytes cle_publique = 2;
+  PreuveSchnorr preuve = 3;
+}
+
+message DeposerDechiffrement {
+  string referendum = 1;
+  bytes dechiffrement = 2;
+  PreuveDechiffrement preuve = 3;
+}
+
+message DeposerCredentials {
+  string referendum = 1;
+  repeated CredentialPublic credentials = 2;
+}
+
+message DeposerBulletin {
+  string referendum = 1;
+  Bulletin bulletin = 2;
+}
+
+// Le champ jeton porte, selon la requête, la session de l'utilisateur connecté, le jeton secret
+// d'un scrutateur ou celui de l'autorité de certification.
+message Requete {
+  string jeton = 1;
+  oneof contenu {
+    Connexion connexion = 10;
+    CreerReferendum creer_referendum = 11;
+    DefinirQuestion definir_question = 12;
+    DefinirElecteurs definir_electeurs = 13;
+    DefinirDates definir_dates = 14;
+    AjouterScrutateur ajouter_scrutateur = 15;
+    AjouterProprietaire ajouter_proprietaire = 16;
+    Referendum obtenir_jeton_autorite = 17;
+    Referendum obtenir_statut = 18;
+    Referendum valider = 19;
+    Referendum sceller = 20;
+    Referendum obtenir_emargement = 21;
+    Referendum archiver = 22;
+    Referendum supprimer = 23;
+    Referendum lister_mes_referendums = 24;
+
+    DeposerCle deposer_cle = 30;
+    DeposerDechiffrement deposer_dechiffrement = 31;
+
+    Referendum obtenir_electeurs = 40; // pour l'autorité de certification
+    DeposerCredentials deposer_credentials = 41;
+
+    Referendum obtenir_referendum = 50;
+    DeposerBulletin deposer_bulletin = 51;
+    Referendum obtenir_donnees_publiques = 52;
+  }
+}
+
+// ---- Réponses ----------------------------------------------------------------------------------
+
+message Erreur {
+  string message = 1;
+}
+
+message Vide {}
+
+message Jeton {
+  string jeton = 1;
+}
+
+message Identifiant {
+  string id = 1;
+}
+
+message Statut {
+  repeated string manques = 1; // vide : le référendum peut être validé
+}
+
+message Emargement {
+  message Ligne {
+    string electeur = 1;
+    int64 date = 2;
+  }
+  repeated Ligne lignes = 1;
+}
+
+message Electeurs {
+  repeated string electeurs = 1;
+}
+
+message Recepisse {
+  string empreinte = 1;
+  bool revote = 2;
+}
+
+message ListeReferendums {
+  repeated ReferendumPublic referendums = 1;
+}
+
+message Reponse {
+  oneof contenu {
+    Erreur erreur = 1;
+    Vide ok = 2;
+    Jeton jeton = 3;
+    Identifiant identifiant = 4;
+    Statut statut = 5;
+    ReferendumPublic referendum = 6;
+    Emargement emargement = 7;
+    Electeurs electeurs = 8;
+    Recepisse recepisse = 9;
+    DonneesPubliques donnees_publiques = 10;
+    ListeReferendums referendums = 11;
+  }
+}
