@@ -72,8 +72,9 @@
             <VBox styleClass="onglet" spacing="12">
                 <Label styleClass="aide" wrapText="true"
                        text="Un électeur par ligne : son identifiant auprès du fournisseur d'identité, puis, séparée par une espace, son adresse e-mail. L'adresse est obligatoire avec un serveur de credentials, qui écrit lui-même aux électeurs. Les adresses ne sont pas relues : ressaisissez-les si vous modifiez la liste."/>
+                <Label styleClass="exemple" text="bob bob@exemple.fr&#10;carol carol@exemple.fr&#10;dave"/>
                 <TextArea fx:id="electeurs" VBox.vgrow="ALWAYS" prefRowCount="10"
-                          promptText="bob bob@exemple.fr&#10;carol carol@exemple.fr&#10;dave"/>
+                          promptText="identifiant adresse-e-mail, un électeur par ligne"/>
                 <Button fx:id="enregistrerElecteurs" text="Enregistrer la liste" styleClass="principal"
                         onAction="#enregistrerElecteurs"/>
             </VBox>

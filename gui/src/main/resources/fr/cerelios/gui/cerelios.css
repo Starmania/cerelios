@@ -164,6 +164,14 @@
     -fx-padding: 6 24 6 0;
 }
 
+.exemple {
+    -fx-font-family: monospace;
+    -fx-text-fill: -encre-douce;
+    -fx-background-color: #f1efe9;
+    -fx-padding: 6 10;
+    -fx-background-radius: 4;
+}
+
 .copiable {
     -fx-font-family: monospace;
     -fx-background-color: #f1efe9;
