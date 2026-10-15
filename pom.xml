@@ -17,6 +17,7 @@
         <module>protocole</module>
         <module>urne</module>
         <module>electeur</module>
+        <module>gui</module>
         <module>scrutateur</module>
         <module>attaques</module>
     </modules>
