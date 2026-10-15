@@ -11,7 +11,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
-/** ecran de choix du référendum après connexion. */
+/** Écran de choix du référendum après connexion. */
 public class ChoixReferendumController {
 
     private final String identifiant;

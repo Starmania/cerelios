@@ -31,7 +31,7 @@ public class MainApp extends Application {
     }
 
     private void changerVue(Parent vue) {
-        if(stage.getScene() == null) {
+        if (stage.getScene() == null) {
             stage.setScene(new Scene(vue, 450, 350));
         } else {
             stage.getScene().setRoot(vue);

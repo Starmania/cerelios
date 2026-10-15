@@ -18,6 +18,14 @@ Maven n'a pas besoin d'être installé : le script `mvnw` télécharge la bonne 
 
 Utiliser `./mvnw` plutôt que `mvn` : le Maven des paquets Debian et Ubuntu fait échouer la génération protobuf.
 
+## Lancer l'interface
+
+```sh
+./mvnw -pl gui javafx:run
+```
+
+Depuis l'IDE ou avec `java -cp`, lancer `fr.cerelios.gui.Launcher` et non `MainApp` : une classe qui étend `Application` exige JavaFX en modules.
+
 ## Messages réseau
 
 Les messages échangés par socket sont décrits en [Protocol Buffers](https://protobuf.dev) dans `protocole/src/main/protobuf/`. Les classes Java correspondantes sont générées à la compilation dans `protocole/target/generated-sources/` et ne sont pas versionnées.
@@ -30,6 +38,7 @@ Les messages échangés par socket sont décrits en [Protocol Buffers](https://p
 | `protocole/`  | Messages échangés entre les programmes et leur sérialisation               |
 | `urne/`       | Serveur : collecte des bulletins, agrégation, clôture, publication         |
 | `electeur/`   | Client de vote                                                             |
+| `gui/`        | Interface JavaFX : connexion et choix du référendum                        |
 | `scrutateur/` | Génération de la clé et déchiffrement du résultat                          |
 | `attaques/`   | Démonstrations des attaques et de leurs parades, une classe par attaque    |
 | `docs/`       | Analyse, conception (schémas d'architecture) et suivi de projet            |
@@ -42,6 +51,8 @@ urne ───────┼──> protocole ──> crypto
 scrutateur ─┘
 
 attaques ──> urne, electeur, scrutateur
+
+gui        (JavaFX, ne dépend encore d'aucun module)
 ```
 
 - `crypto` ne dépend que du JDK à l'exécution (les annotations JetBrains, communes à tous les modules, ne servent qu'à la compilation).
