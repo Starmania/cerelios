@@ -21,8 +21,12 @@ Utiliser `./mvnw` plutôt que `mvn` : le Maven des paquets Debian et Ubuntu fait
 ## Lancer l'interface
 
 ```sh
-./mvnw -pl gui javafx:run
+./mvnw install -DskipTests                                  # une fois, puis après chaque changement hors de gui
+./mvnw -pl gui javafx:run -Dcerelios.main=fr.cerelios.gui.Demo  # urne :5000 et serveur de credentials :5001
+./mvnw -pl gui javafx:run                                   # l'application, dans un autre terminal
 ```
+
+`Demo` crée les comptes alice, bob, carol et dave (mot de passe `demo`) et affiche dans son terminal chaque e-mail en entier : jetons des scrutateurs, graine de l'opérateur, credentials des électeurs. Une seule application sert tous les rôles, choisis sur l'écran d'accueil ; ouvrez-en plusieurs pour jouer plusieurs rôles à la fois.
 
 Depuis l'IDE ou avec `java -cp`, lancer `fr.cerelios.gui.Launcher` et non `MainApp` : une classe qui étend `Application` exige JavaFX en modules.
 
@@ -63,7 +67,7 @@ Les messages échangés par socket sont décrits en [Protocol Buffers](https://p
 | `protocole/`     | Messages échangés entre les programmes et leur sérialisation              |
 | `urne/`          | Serveur : collecte des bulletins, agrégation, clôture, publication        |
 | `electeur/`      | Client de vote                                                            |
-| `gui/`           | Interface JavaFX : connexion et choix du référendum                       |
+| `gui/`           | Interface JavaFX de tous les rôles, et `Demo` pour l'essayer en local     |
 | `scrutateur/`    | Génération de la clé et déchiffrement du résultat                         |
 | `autorite/`      | Autorité de certification manuelle et opérateur du serveur de credentials |
 | `certification/` | Serveur de credentials : génère, garde chiffrés et envoie les credentials |
@@ -81,7 +85,7 @@ certification ─┘
 
 attaques ──> urne, electeur, scrutateur
 
-gui        (JavaFX, ne dépend encore d'aucun module)
+gui ──> electeur, scrutateur, autorite (et urne, certification pour Demo)
 ```
 
 - `crypto` ne dépend que du JDK à l'exécution (les annotations JetBrains, communes à tous les modules, ne servent qu'à la compilation).

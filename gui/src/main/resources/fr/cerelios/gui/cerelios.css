@@ -1,0 +1,232 @@
+/* Cerelios : encre bleu nuit sur papier légèrement chaud ; vert pour Oui, terre cuite pour Non. */
+.root {
+    -encre: #1f2a44;
+    -encre-douce: #5b6478;
+    -papier: #f6f4ef;
+    -carte: #ffffff;
+    -trait: #dcd8ce;
+    -accent: #2f5aa8;
+    -accent-fonce: #234682;
+    -oui: #2e7d5b;
+    -non: #b5523b;
+    -fx-font-size: 13px;
+    -fx-background-color: -papier;
+    -fx-text-fill: -encre;
+}
+
+.label {
+    -fx-text-fill: -encre;
+}
+
+/* ---- Accueil ---- */
+.titre-accueil {
+    -fx-font-size: 38px;
+    -fx-font-weight: bold;
+}
+
+.sous-titre {
+    -fx-font-size: 15px;
+    -fx-text-fill: -encre-douce;
+}
+
+.tuile {
+    -fx-background-color: -carte;
+    -fx-border-color: -trait;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 16;
+    -fx-pref-width: 220;
+    -fx-pref-height: 96;
+    -fx-alignment: top-left;
+    -fx-cursor: hand;
+}
+
+.tuile:hover {
+    -fx-border-color: -accent;
+}
+
+.tuile:focused {
+    -fx-border-color: -accent;
+    -fx-border-width: 2;
+}
+
+.titre-role {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+/* ---- Pages ---- */
+.barre {
+    -fx-background-color: -encre;
+    -fx-padding: 10 16;
+}
+
+.barre .label,
+.barre .lien {
+    -fx-text-fill: white;
+}
+
+.titre-page {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
+.lien {
+    -fx-background-color: transparent;
+    -fx-text-fill: -accent;
+    -fx-padding: 2 4;
+    -fx-cursor: hand;
+}
+
+.lien:hover {
+    -fx-underline: true;
+}
+
+.defilement,
+.defilement > .viewport {
+    -fx-background-color: -papier;
+}
+
+.bas {
+    -fx-background-color: -carte;
+    -fx-border-color: -trait transparent transparent transparent;
+    -fx-padding: 8 16;
+    -fx-min-height: 36;
+}
+
+.carte {
+    -fx-background-color: -carte;
+    -fx-border-color: -trait;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 16;
+}
+
+.titre-carte {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.libelle {
+    -fx-text-fill: -encre-douce;
+}
+
+.aide {
+    -fx-text-fill: -encre-douce;
+    -fx-font-size: 12px;
+}
+
+.question {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+
+.onglet {
+    -fx-padding: 16;
+    -fx-background-color: -carte;
+}
+
+.etape {
+    -fx-font-weight: bold;
+}
+
+/* ---- Boutons ---- */
+.button {
+    -fx-background-radius: 4;
+    -fx-cursor: hand;
+}
+
+.principal {
+    -fx-background-color: -accent;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}
+
+.principal:hover {
+    -fx-background-color: -accent-fonce;
+}
+
+.principal:disabled {
+    -fx-opacity: 0.45;
+}
+
+.danger {
+    -fx-text-fill: -non;
+}
+
+.choix {
+    -fx-font-size: 18px;
+    -fx-padding: 6 24 6 0;
+}
+
+.copiable {
+    -fx-font-family: monospace;
+    -fx-background-color: #f1efe9;
+}
+
+/* ---- État et résultat ---- */
+.statut-en-cours {
+    -fx-text-fill: -encre-douce;
+}
+
+.statut-succes {
+    -fx-text-fill: -oui;
+    -fx-font-weight: bold;
+}
+
+.statut-erreur {
+    -fx-text-fill: -non;
+    -fx-font-weight: bold;
+}
+
+.pastille {
+    -fx-padding: 2 10;
+    -fx-background-radius: 10;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-background-color: #e6e3db;
+}
+
+.pastille-ouvert,
+.pastille-clos {
+    -fx-background-color: #d9ebe2;
+    -fx-text-fill: -oui;
+}
+
+.pastille-depouillement,
+.pastille-valide {
+    -fx-background-color: #dfe6f4;
+    -fx-text-fill: -accent-fonce;
+}
+
+.pastille-publie {
+    -fx-background-color: -encre;
+    -fx-text-fill: white;
+}
+
+.resultat {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+}
+
+.barre-resultat {
+    -fx-min-height: 28;
+    -fx-background-radius: 4;
+}
+
+.barre-oui,
+.barre-non {
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-padding: 4 8;
+    -fx-alignment: center-left;
+}
+
+.barre-oui {
+    -fx-background-color: -oui;
+}
+
+.barre-non {
+    -fx-background-color: -non;
+    -fx-alignment: center-right;
+}

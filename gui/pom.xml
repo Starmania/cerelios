@@ -11,9 +11,35 @@
     </parent>
 
     <artifactId>gui</artifactId>
-    <description>Interface JavaFX : connexion et choix du référendum</description>
+    <description>Interface JavaFX de tous les rôles : électeur, administrateur, scrutateur, autorité, opérateur, auditeur</description>
+
+    <properties>
+        <cerelios.main>fr.cerelios.gui.MainApp</cerelios.main>
+    </properties>
 
     <dependencies>
+        <!-- Programmes clients de chaque rôle -->
+        <dependency>
+            <groupId>fr.cerelios</groupId>
+            <artifactId>electeur</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>fr.cerelios</groupId>
+            <artifactId>scrutateur</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>fr.cerelios</groupId>
+            <artifactId>autorite</artifactId>
+        </dependency>
+        <!-- Pour Demo seulement : urne et serveur de credentials lancés sur ce poste -->
+        <dependency>
+            <groupId>fr.cerelios</groupId>
+            <artifactId>urne</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>fr.cerelios</groupId>
+            <artifactId>certification</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
@@ -28,7 +54,8 @@
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
                 <configuration>
-                    <mainClass>fr.cerelios.gui.MainApp</mainClass>
+                    <!-- -Dcerelios.main=fr.cerelios.gui.Demo lance l'urne et le serveur de démonstration -->
+                    <mainClass>${cerelios.main}</mainClass>
                 </configuration>
             </plugin>
         </plugins>
