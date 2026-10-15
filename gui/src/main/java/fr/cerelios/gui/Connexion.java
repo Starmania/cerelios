@@ -1,12 +1,11 @@
 package fr.cerelios.gui;
 
 import fr.cerelios.electeur.Electeur;
-import javafx.geometry.Pos;
+import javafx.fxml.FXML;
 import javafx.scene.Parent;
-import javafx.scene.control.Button;
+import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
-import javafx.scene.layout.VBox;
 
 /**
  * Connexion auprès du fournisseur d'identité de l'urne, commune aux électeurs et administrateurs.
@@ -15,9 +14,11 @@ public final class Connexion {
 
     private final Contexte contexte;
     private final String role;
-    private final TextField identifiant = new TextField();
-    private final PasswordField secret = new PasswordField();
     private final Statut statut = new Statut();
+    private Runnable suite;
+    @FXML private Label aide;
+    @FXML private TextField identifiant;
+    @FXML private PasswordField secret;
 
     public Connexion(Contexte contexte, String role) {
         this.contexte = contexte;
@@ -28,42 +29,32 @@ public final class Connexion {
      * @param suite écran à ouvrir une fois connecté
      */
     public Parent vue(Runnable suite) {
-        identifiant.setPromptText("Identifiant");
-        secret.setPromptText("Mot de passe");
-        Button connecter =
-                Ui.principal(
-                        "Se connecter",
-                        () -> {
-                            String id = identifiant.getText().strip();
-                            if (id.isEmpty() || secret.getText().isEmpty()) {
-                                statut.erreur("Saisissez l'identifiant et le mot de passe.");
-                                return;
-                            }
-                            String motDePasse = secret.getText();
-                            contexte.executer(
-                                    statut,
-                                    () -> {
-                                        new Electeur(contexte.urne(), Contexte.GROUPE)
-                                                .connecter(id, motDePasse);
-                                        return null;
-                                    },
-                                    ok -> suite.run());
-                        });
-        connecter.setDefaultButton(true);
-        VBox carte =
-                Ui.carte(
-                        "Connexion",
-                        Ui.aide(
-                                "Vos identifiants sont vérifiés par le fournisseur d'identité de"
-                                        + " l'urne ("
-                                        + contexte.adresseUrne()
-                                        + ")."),
-                        Ui.formulaire("Identifiant", identifiant, "Mot de passe", secret),
-                        connecter);
-        carte.setMaxWidth(440);
-        VBox centre = new VBox(carte);
-        centre.setAlignment(Pos.TOP_CENTER);
-        centre.setStyle("-fx-padding: 40 20 20 20;");
-        return Ui.page(contexte, role, centre, statut);
+        this.suite = suite;
+        return Ui.page(contexte, role, Ui.charger("Connexion.fxml", this), statut);
+    }
+
+    @FXML
+    private void initialize() {
+        aide.setText(
+                "Vos identifiants sont vérifiés par le fournisseur d'identité de l'urne ("
+                        + contexte.adresseUrne()
+                        + ").");
+    }
+
+    @FXML
+    private void connecter() {
+        String id = identifiant.getText().strip();
+        String motDePasse = secret.getText();
+        if (id.isEmpty() || motDePasse.isEmpty()) {
+            statut.erreur("Saisissez l'identifiant et le mot de passe.");
+            return;
+        }
+        contexte.executer(
+                statut,
+                () -> {
+                    new Electeur(contexte.urne(), Contexte.GROUPE).connecter(id, motDePasse);
+                    return null;
+                },
+                ok -> suite.run());
     }
 }

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import fr.cerelios.gui.ChampFichier?>
+<?import fr.cerelios.gui.FicheReferendum?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.ColumnConstraints?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="fr.cerelios.gui.scrutateur.EspaceScrutateur" spacing="16">
+
+    <VBox styleClass="carte" spacing="10">
+        <Label text="Votre invitation" styleClass="titre-carte"/>
+        <Label styleClass="aide" text="Recopiez les champs de l'e-mail d'invitation."/>
+        <GridPane hgap="12" vgap="8">
+            <columnConstraints>
+                <ColumnConstraints minWidth="120"/>
+                <ColumnConstraints hgrow="ALWAYS"/>
+            </columnConstraints>
+            <Label text="Référendum" styleClass="libelle"/>
+            <TextField fx:id="referendum" promptText="Numéro du référendum" GridPane.columnIndex="1"/>
+            <Label text="Nom" styleClass="libelle" GridPane.rowIndex="1"/>
+            <TextField fx:id="nom" promptText="Votre nom de scrutateur"
+                       GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+            <Label text="Jeton" styleClass="libelle" GridPane.rowIndex="2"/>
+            <TextField fx:id="jeton" promptText="Jeton reçu par e-mail"
+                       GridPane.columnIndex="1" GridPane.rowIndex="2"/>
+            <Label text="Fichier secret" styleClass="libelle" GridPane.rowIndex="3"/>
+            <ChampFichier fx:id="fichier" invite="Fichier de votre clé secrète" enregistrer="true"
+                          GridPane.columnIndex="1" GridPane.rowIndex="3"/>
+        </GridPane>
+        <Button text="Ouvrir" styleClass="principal" defaultButton="true" onAction="#ouvrir"/>
+    </VBox>
+
+    <FicheReferendum fx:id="fiche" visible="false" managed="false"/>
+
+    <VBox fx:id="carteSeul" styleClass="carte" spacing="10" visible="false" managed="false">
+        <Label text="Votre clé" styleClass="titre-carte"/>
+        <Label styleClass="aide" wrapText="true"
+               text="Chaque scrutateur génère sa propre clé. La partie secrète est enregistrée dans le fichier choisi, sur ce poste seulement : sans elle, le résultat ne pourra pas être déchiffré. Gardez-en une copie sûre."/>
+        <Button text="Générer ma clé" styleClass="principal" onAction="#generer"/>
+    </VBox>
+
+    <VBox fx:id="carteSeuil" styleClass="carte" spacing="10" visible="false" managed="false">
+        <Label text="Génération de la clé à plusieurs" styleClass="titre-carte"/>
+        <Label styleClass="aide" wrapText="true"
+               text="Les scrutateurs génèrent la clé ensemble, en trois étapes : clés de canal, polynômes, clés des parts. Chaque étape attend que tous aient fini la précédente. Le fichier ne garde que votre clé de canal : votre part se recalcule à partir de ce que l'urne conserve."/>
+        <Label fx:id="etape" styleClass="etape"/>
+        <HBox spacing="12" alignment="CENTER_LEFT">
+            <Button text="Avancer" styleClass="principal" onAction="#avancer"/>
+            <CheckBox fx:id="automatique" text="Avancer automatiquement toutes les 3 s"/>
+        </HBox>
+    </VBox>
+
+    <VBox fx:id="carteDepouillement" styleClass="carte" spacing="10" visible="false" managed="false">
+        <Label text="Vérifications et dépouillement" styleClass="titre-carte"/>
+        <FlowPane hgap="8" vgap="8">
+            <Button text="Ma clé est-elle utilisée ?" onAction="#verifierCle"/>
+            <Button text="Déchiffrer le total" styleClass="principal" onAction="#dechiffrer"/>
+            <Button text="Mon déchiffrement est-il publié ?" onAction="#verifierDechiffrement"/>
+        </FlowPane>
+        <Label styleClass="aide" wrapText="true"
+               text="Le total ne se déchiffre qu'après la clôture et le délai de grâce. Seul le total est déchiffré, jamais un bulletin."/>
+    </VBox>
+</VBox>

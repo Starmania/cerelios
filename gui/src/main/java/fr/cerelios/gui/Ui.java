@@ -1,25 +1,29 @@
 package fr.cerelios.gui;
 
 import fr.cerelios.protocole.messages.Etat;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.URL;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import javafx.geometry.Insets;
+import javafx.fxml.FXMLLoader;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.Parent;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
-import javafx.scene.control.TextField;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.StackPane;
 
-/** Briques communes des écrans. */
+/** Cadre commun des écrans et petites briques qui ne relèvent pas d'un FXML. */
 public final class Ui {
 
     private static final DateTimeFormatter FORMAT_DATE =
@@ -28,10 +32,29 @@ public final class Ui {
     private Ui() {}
 
     /**
-     * Page type : barre de titre avec retour à l'accueil, contenu défilant au centre, ligne d'état
-     * en bas.
+     * Charge le FXML {@code fichier}, rangé à côté de la classe du contrôleur, avec ce contrôleur
+     * déjà construit : le {@code fx:controller} du FXML sert à Scene Builder, l'instance vient
+     * d'ici.
      */
-    public static BorderPane page(Contexte contexte, String titre, Node contenu, Statut statut) {
+    public static <T extends Parent> T charger(String fichier, Object controleur) {
+        URL url = controleur.getClass().getResource(fichier);
+        if (url == null) {
+            throw new IllegalStateException("FXML introuvable : " + fichier);
+        }
+        FXMLLoader chargeur = new FXMLLoader(url);
+        chargeur.setControllerFactory(type -> controleur);
+        try {
+            return chargeur.load();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Chargement de " + fichier + " impossible", e);
+        }
+    }
+
+    /**
+     * Page type : barre de titre avec retour à l'accueil, contenu centré et défilant, ligne d'état
+     * en bas. Le contenu suit la fenêtre dans les deux sens, jusqu'à sa largeur maximale.
+     */
+    public static BorderPane page(Contexte contexte, String titre, Parent contenu, Statut statut) {
         Button retour = new Button("← Accueil");
         retour.getStyleClass().add("lien");
         retour.setOnAction(
@@ -45,8 +68,14 @@ public final class Ui {
         barre.setAlignment(Pos.CENTER_LEFT);
         barre.getStyleClass().add("barre");
 
-        javafx.scene.control.ScrollPane defilement = new javafx.scene.control.ScrollPane(contenu);
+        contenu.getStyleClass().add("contenu");
+        StackPane centre = new StackPane(contenu);
+        StackPane.setAlignment(contenu, Pos.TOP_CENTER);
+        ScrollPane defilement = new ScrollPane(centre);
         defilement.setFitToWidth(true);
+        // Le contenu prend toute la hauteur tant qu'il y tient, pour que tables et listes
+        // grandissent avec la fenêtre ; au-delà, la page défile.
+        defilement.setFitToHeight(true);
         defilement.getStyleClass().add("defilement");
 
         HBox bas = new HBox(statut);
@@ -59,76 +88,29 @@ public final class Ui {
         return page;
     }
 
-    /** Carte : bloc titré qui regroupe des champs. */
-    public static VBox carte(String titre, Node... contenu) {
-        Label libelle = new Label(titre);
-        libelle.getStyleClass().add("titre-carte");
-        VBox carte = new VBox(10);
-        carte.getChildren().add(libelle);
-        carte.getChildren().addAll(contenu);
-        carte.getStyleClass().add("carte");
-        return carte;
+    public static void montrer(Node noeud, boolean visible) {
+        noeud.setVisible(visible);
+        noeud.setManaged(visible);
     }
 
-    /** Colonne de cartes, avec la marge de la page. */
-    public static VBox colonne(Node... cartes) {
-        VBox colonne = new VBox(16, cartes);
-        colonne.setPadding(new Insets(20));
-        colonne.setMaxWidth(860);
-        return colonne;
+    public static void copier(String texte) {
+        ClipboardContent contenu = new ClipboardContent();
+        contenu.putString(texte);
+        Clipboard.getSystemClipboard().setContent(contenu);
     }
 
-    /** Grille libellé / champ. */
-    public static GridPane formulaire(Object... libellesEtChamps) {
-        GridPane grille = new GridPane();
-        grille.setHgap(12);
-        grille.setVgap(8);
-        for (int i = 0; i < libellesEtChamps.length; i += 2) {
-            Label libelle = new Label((String) libellesEtChamps[i]);
-            libelle.getStyleClass().add("libelle");
-            Node champ = (Node) libellesEtChamps[i + 1];
-            grille.add(libelle, 0, i / 2);
-            grille.add(champ, 1, i / 2);
-            GridPane.setHgrow(champ, Priority.ALWAYS);
-            if (champ instanceof Region r) {
-                r.setMaxWidth(Double.MAX_VALUE);
-            }
-        }
-        return grille;
+    public static boolean confirmer(Contexte contexte, String message) {
+        Alert alerte =
+                new Alert(Alert.AlertType.CONFIRMATION, message, ButtonType.OK, ButtonType.CANCEL);
+        alerte.setHeaderText(null);
+        alerte.initOwner(contexte.stage());
+        return alerte.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK;
     }
 
     public static HBox ligne(Node... noeuds) {
         HBox ligne = new HBox(8, noeuds);
         ligne.setAlignment(Pos.CENTER_LEFT);
         return ligne;
-    }
-
-    public static Button bouton(String texte, Runnable action) {
-        Button bouton = new Button(texte);
-        bouton.setOnAction(e -> action.run());
-        return bouton;
-    }
-
-    public static Button principal(String texte, Runnable action) {
-        Button bouton = bouton(texte, action);
-        bouton.getStyleClass().add("principal");
-        return bouton;
-    }
-
-    /** Champ en lecture seule dont le texte se sélectionne, avec un bouton pour le copier. */
-    public static HBox copiable(TextField champ) {
-        champ.setEditable(false);
-        champ.getStyleClass().add("copiable");
-        HBox.setHgrow(champ, Priority.ALWAYS);
-        Button copier =
-                bouton(
-                        "Copier",
-                        () -> {
-                            ClipboardContent contenu = new ClipboardContent();
-                            contenu.putString(champ.getText());
-                            Clipboard.getSystemClipboard().setContent(contenu);
-                        });
-        return ligne(champ, copier);
     }
 
     public static Label texte(String texte) {

@@ -9,12 +9,13 @@ import fr.cerelios.gui.Ui;
 import fr.cerelios.protocole.messages.EtatPartage;
 import fr.cerelios.protocole.messages.ReferendumPublic;
 import fr.cerelios.scrutateur.Scrutateur;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
+import javafx.fxml.FXML;
 import javafx.scene.Parent;
-import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
@@ -26,23 +27,40 @@ public final class EspaceScrutateur {
 
     private final Contexte contexte;
     private final Statut statut = new Statut();
-    private final TextField referendum = new TextField();
-    private final TextField nom = new TextField();
-    private final TextField jeton = new TextField();
-    private final ChampFichier fichier;
-    private final FicheReferendum fiche = new FicheReferendum();
-    private final Label etape = new Label();
-    private final CheckBox automatique = new CheckBox("Avancer automatiquement toutes les 3 s");
-    private final Timeline minuterie;
-    private final VBox carteSeul;
-    private final VBox carteSeuil;
-    private final VBox carteDepouillement;
+    private final Timeline minuterie =
+            new Timeline(new KeyFrame(Duration.seconds(3), e -> avancer()));
+    @FXML private TextField referendum;
+    @FXML private TextField nom;
+    @FXML private TextField jeton;
+    @FXML private ChampFichier fichier;
+    @FXML private FicheReferendum fiche;
+    @FXML private VBox carteSeul;
+    @FXML private VBox carteSeuil;
+    @FXML private VBox carteDepouillement;
+    @FXML private Label etape;
+    @FXML private CheckBox automatique;
 
     public EspaceScrutateur(Contexte contexte) {
         this.contexte = contexte;
-        fichier = new ChampFichier("Fichier de votre clé secrète", true, contexte.stage());
-        minuterie = new Timeline(new KeyFrame(Duration.seconds(3), e -> avancer()));
         minuterie.setCycleCount(Timeline.INDEFINITE);
+    }
+
+    public Parent vue() {
+        Parent page =
+                Ui.page(contexte, "Scrutateur", Ui.charger("EspaceScrutateur.fxml", this), statut);
+        // La minuterie s'arrête quand on quitte l'écran.
+        page.sceneProperty()
+                .addListener(
+                        (o, avant, scene) -> {
+                            if (scene == null) {
+                                automatique.setSelected(false);
+                            }
+                        });
+        return page;
+    }
+
+    @FXML
+    private void initialize() {
         automatique
                 .selectedProperty()
                 .addListener(
@@ -53,74 +71,9 @@ public final class EspaceScrutateur {
                                 minuterie.stop();
                             }
                         });
-
-        carteSeul =
-                Ui.carte(
-                        "Votre clé",
-                        Ui.aide(
-                                "Chaque scrutateur génère sa propre clé. La partie secrète est"
-                                        + " enregistrée dans le fichier choisi, sur ce poste"
-                                        + " seulement : sans elle, le résultat ne pourra pas être"
-                                        + " déchiffré. Gardez-en une copie sûre."),
-                        Ui.principal("Générer ma clé", this::generer));
-        etape.getStyleClass().add("etape");
-        carteSeuil =
-                Ui.carte(
-                        "Génération de la clé à plusieurs",
-                        Ui.aide(
-                                "Les scrutateurs génèrent la clé ensemble, en trois étapes : clés"
-                                    + " de canal, polynômes, clés des parts. Chaque étape attend"
-                                    + " que tous aient fini la précédente. Le fichier ne garde que"
-                                    + " votre clé de canal : votre part se recalcule à partir de ce"
-                                    + " que l'urne conserve."),
-                        etape,
-                        Ui.ligne(Ui.principal("Avancer", this::avancer), automatique));
-        carteDepouillement =
-                Ui.carte(
-                        "Vérifications et dépouillement",
-                        Ui.ligne(
-                                Ui.bouton("Ma clé est-elle utilisée ?", this::verifierCle),
-                                Ui.principal("Déchiffrer le total", this::dechiffrer),
-                                Ui.bouton(
-                                        "Mon déchiffrement est-il publié ?",
-                                        this::verifierDechiffrement)),
-                        Ui.aide(
-                                "Le total ne se déchiffre qu'après la clôture et le délai de grâce."
-                                        + " Seul le total est déchiffré, jamais un bulletin."));
-        for (VBox carte : new VBox[] {carteSeul, carteSeuil, carteDepouillement}) {
-            montrer(carte, false);
-        }
-        montrer(fiche, false);
     }
 
-    public Parent vue() {
-        referendum.setPromptText("Numéro du référendum");
-        nom.setPromptText("Votre nom de scrutateur");
-        jeton.setPromptText("Jeton reçu par e-mail");
-        Button ouvrir = Ui.principal("Ouvrir", this::ouvrir);
-        ouvrir.setDefaultButton(true);
-        VBox invitation =
-                Ui.carte(
-                        "Votre invitation",
-                        Ui.aide("Recopiez les champs de l'e-mail d'invitation."),
-                        Ui.formulaire(
-                                "Référendum",
-                                referendum,
-                                "Nom",
-                                nom,
-                                "Jeton",
-                                jeton,
-                                "Fichier secret",
-                                fichier),
-                        ouvrir);
-        return Ui.page(
-                contexte,
-                "Scrutateur",
-                Ui.colonne(invitation, fiche, carteSeul, carteSeuil, carteDepouillement),
-                statut);
-    }
-
-    private Scrutateur scrutateur() throws java.io.IOException {
+    private Scrutateur scrutateur() throws IOException {
         return new Scrutateur(
                 contexte.urne(),
                 Contexte.GROUPE,
@@ -129,6 +82,7 @@ public final class EspaceScrutateur {
                 jeton.getText().strip());
     }
 
+    @FXML
     private void ouvrir() {
         String id = referendum.getText().strip();
         contexte.executer(
@@ -139,23 +93,21 @@ public final class EspaceScrutateur {
 
     private void afficher(ReferendumPublic r) {
         fiche.afficher(r);
-        montrer(fiche, true);
+        Ui.montrer(fiche, true);
         boolean aSeuil = r.getSeuil() > 0;
-        montrer(carteSeul, !aSeuil);
-        montrer(carteSeuil, aSeuil);
-        montrer(carteDepouillement, true);
+        Ui.montrer(carteSeul, !aSeuil);
+        Ui.montrer(carteSeuil, aSeuil);
+        Ui.montrer(carteDepouillement, true);
         if (aSeuil) {
             etape.setText(
                     "Seuil : " + r.getSeuil() + " sur " + r.getScrutateursCount() + " scrutateurs");
         }
     }
 
+    @FXML
     private void generer() {
-        Path f;
-        try {
-            f = fichier.chemin();
-        } catch (IllegalArgumentException e) {
-            statut.erreur(e.getMessage());
+        Path f = fichierOuErreur();
+        if (f == null) {
             return;
         }
         if (Files.exists(f)) {
@@ -169,13 +121,11 @@ public final class EspaceScrutateur {
                 cle -> statut.succes("Clé déposée. Partie secrète enregistrée dans " + f + "."));
     }
 
+    @FXML
     private void avancer() {
-        Path f;
-        try {
-            f = fichier.chemin();
-        } catch (IllegalArgumentException e) {
+        Path f = fichierOuErreur();
+        if (f == null) {
             automatique.setSelected(false);
-            statut.erreur(e.getMessage());
             return;
         }
         contexte.executer(
@@ -190,6 +140,7 @@ public final class EspaceScrutateur {
                 });
     }
 
+    @FXML
     private void verifierCle() {
         Path f = fichierOuErreur();
         if (f == null) {
@@ -209,6 +160,7 @@ public final class EspaceScrutateur {
                 });
     }
 
+    @FXML
     private void dechiffrer() {
         Path f = fichierOuErreur();
         if (f == null) {
@@ -223,6 +175,7 @@ public final class EspaceScrutateur {
                 ok -> statut.succes("Déchiffrement partiel déposé, avec sa preuve."));
     }
 
+    @FXML
     private void verifierDechiffrement() {
         contexte.executer(
                 statut,
@@ -253,10 +206,5 @@ public final class EspaceScrutateur {
             case TERMINE -> "terminé";
             default -> "inconnue";
         };
-    }
-
-    private static void montrer(javafx.scene.Node noeud, boolean visible) {
-        noeud.setVisible(visible);
-        noeud.setManaged(visible);
     }
 }

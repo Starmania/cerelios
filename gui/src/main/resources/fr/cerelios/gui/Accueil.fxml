@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox fx:id="racine" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="fr.cerelios.gui.Accueil"
+      alignment="TOP_CENTER" spacing="18" styleClass="accueil">
+    <padding><Insets top="48" right="24" bottom="24" left="24"/></padding>
+
+    <Label text="Cerelios" styleClass="titre-accueil"/>
+    <Label text="Référendum Oui / Non vérifiable" styleClass="sous-titre"/>
+
+    <HBox alignment="CENTER" spacing="8">
+        <Label text="Urne :"/>
+        <TextField fx:id="adresse" promptText="hôte:port" prefColumnCount="18"/>
+    </HBox>
+
+    <!-- Les tuiles passent à la ligne selon la largeur de la fenêtre (voir initialize). -->
+    <FlowPane fx:id="roles" alignment="CENTER" hgap="14" vgap="14">
+        <Button styleClass="tuile" onAction="#electeur">
+            <graphic>
+                <VBox spacing="6">
+                    <Label text="Électeur" styleClass="titre-role"/>
+                    <Label text="Voter avec votre credential et vérifier votre bulletin"
+                           styleClass="aide" wrapText="true"/>
+                </VBox>
+            </graphic>
+        </Button>
+        <Button styleClass="tuile" onAction="#administrateur">
+            <graphic>
+                <VBox spacing="6">
+                    <Label text="Administrateur" styleClass="titre-role"/>
+                    <Label text="Préparer, valider et suivre un référendum"
+                           styleClass="aide" wrapText="true"/>
+                </VBox>
+            </graphic>
+        </Button>
+        <Button styleClass="tuile" onAction="#scrutateur">
+            <graphic>
+                <VBox spacing="6">
+                    <Label text="Scrutateur" styleClass="titre-role"/>
+                    <Label text="Générer votre clé puis déchiffrer le résultat"
+                           styleClass="aide" wrapText="true"/>
+                </VBox>
+            </graphic>
+        </Button>
+        <Button styleClass="tuile" onAction="#autorite">
+            <graphic>
+                <VBox spacing="6">
+                    <Label text="Autorité de certification" styleClass="titre-role"/>
+                    <Label text="Générer les credentials des électeurs"
+                           styleClass="aide" wrapText="true"/>
+                </VBox>
+            </graphic>
+        </Button>
+        <Button styleClass="tuile" onAction="#operateur">
+            <graphic>
+                <VBox spacing="6">
+                    <Label text="Opérateur des credentials" styleClass="titre-role"/>
+                    <Label text="Vérifier le certificat et renvoyer des credentials"
+                           styleClass="aide" wrapText="true"/>
+                </VBox>
+            </graphic>
+        </Button>
+        <Button styleClass="tuile" onAction="#auditeur">
+            <graphic>
+                <VBox spacing="6">
+                    <Label text="Auditeur" styleClass="titre-role"/>
+                    <Label text="Revérifier tout un référendum, sans aucun secret"
+                           styleClass="aide" wrapText="true"/>
+                </VBox>
+            </graphic>
+        </Button>
+    </FlowPane>
+</VBox>

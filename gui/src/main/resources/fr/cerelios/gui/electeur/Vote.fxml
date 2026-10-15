@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import fr.cerelios.gui.ChampCopiable?>
+<?import fr.cerelios.gui.FicheReferendum?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.PasswordField?>
+<?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.ToggleGroup?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="fr.cerelios.gui.electeur.Vote" spacing="16">
+
+    <VBox styleClass="carte" spacing="10">
+        <Label text="Référendum" styleClass="titre-carte"/>
+        <HBox spacing="8">
+            <TextField fx:id="numero" HBox.hgrow="ALWAYS"
+                       promptText="Numéro du référendum, reçu avec votre credential"/>
+            <Button text="Ouvrir" styleClass="principal" defaultButton="true" onAction="#ouvrir"/>
+        </HBox>
+    </VBox>
+
+    <FicheReferendum fx:id="fiche" visible="false" managed="false"/>
+
+    <VBox fx:id="carteVote" styleClass="carte" spacing="10" visible="false" managed="false">
+        <Label text="Votre vote" styleClass="titre-carte"/>
+        <fx:define>
+            <ToggleGroup fx:id="choix"/>
+        </fx:define>
+        <HBox spacing="8">
+            <RadioButton fx:id="oui" text="Oui" toggleGroup="$choix" styleClass="choix"/>
+            <RadioButton fx:id="non" text="Non" toggleGroup="$choix" styleClass="choix"/>
+        </HBox>
+        <HBox spacing="12" alignment="CENTER_LEFT">
+            <Label text="Credential" styleClass="libelle"/>
+            <PasswordField fx:id="credential" HBox.hgrow="ALWAYS"
+                           promptText="Reçu par e-mail ou de l'autorité de certification"/>
+        </HBox>
+        <Label styleClass="aide" wrapText="true"
+               text="Le vote est chiffré sur ce poste avant d'être envoyé. Vous pouvez revoter tant que le vote est ouvert : seul le dernier bulletin compte."/>
+        <Button fx:id="voter" text="Voter" styleClass="principal" onAction="#voter"/>
+    </VBox>
+
+    <VBox fx:id="carteRecepisse" styleClass="carte" spacing="10" visible="false" managed="false">
+        <Label text="Votre récépissé" styleClass="titre-carte"/>
+        <Label styleClass="aide" wrapText="true"
+               text="Notez ce traceur : il permet de retrouver votre bulletin dans l'urne publiée, sans révéler votre vote."/>
+        <ChampCopiable fx:id="traceur"/>
+        <Button text="Vérifier qu'il est dans l'urne" onAction="#verifier"/>
+    </VBox>
+</VBox>

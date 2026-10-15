@@ -7,35 +7,51 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.stage.FileChooser;
-import javafx.stage.Window;
 
-/** Chemin de fichier saisi ou choisi dans une boîte de dialogue. */
+/**
+ * Chemin de fichier saisi ou choisi dans une boîte de dialogue. Dans un FXML : {@code <ChampFichier
+ * invite="…" enregistrer="true"/>}.
+ */
 public final class ChampFichier extends HBox {
 
     private final TextField chemin = new TextField();
+    private boolean enregistrer;
 
-    /**
-     * @param enregistrer vrai pour un fichier à créer, faux pour un fichier à ouvrir
-     */
-    public ChampFichier(String invite, boolean enregistrer, Window fenetre) {
+    public ChampFichier() {
         super(8);
-        chemin.setPromptText(invite);
         HBox.setHgrow(chemin, Priority.ALWAYS);
-        Button choisir =
-                Ui.bouton(
-                        "Choisir…",
-                        () -> {
-                            FileChooser dialogue = new FileChooser();
-                            dialogue.setTitle(invite);
-                            File f =
-                                    enregistrer
-                                            ? dialogue.showSaveDialog(fenetre)
-                                            : dialogue.showOpenDialog(fenetre);
-                            if (f != null) {
-                                chemin.setText(f.getAbsolutePath());
-                            }
-                        });
+        Button choisir = new Button("Choisir…");
+        choisir.setOnAction(e -> choisir());
         getChildren().addAll(chemin, choisir);
+    }
+
+    public String getInvite() {
+        return chemin.getPromptText();
+    }
+
+    public void setInvite(String invite) {
+        chemin.setPromptText(invite);
+    }
+
+    public boolean isEnregistrer() {
+        return enregistrer;
+    }
+
+    /** Vrai pour un fichier à créer, faux (par défaut) pour un fichier à ouvrir. */
+    public void setEnregistrer(boolean enregistrer) {
+        this.enregistrer = enregistrer;
+    }
+
+    private void choisir() {
+        FileChooser dialogue = new FileChooser();
+        dialogue.setTitle(getInvite());
+        File f =
+                enregistrer
+                        ? dialogue.showSaveDialog(getScene().getWindow())
+                        : dialogue.showOpenDialog(getScene().getWindow());
+        if (f != null) {
+            chemin.setText(f.getAbsolutePath());
+        }
     }
 
     /**
