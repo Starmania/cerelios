@@ -21,6 +21,17 @@
                text="Télécharge les données publiques et vérifie : preuves des clés, certificat, chaque bulletin et sa signature, le total chiffré, les déchiffrements partiels et le résultat."/>
     </VBox>
 
+    <VBox styleClass="carte" spacing="10">
+        <Label text="Rechercher un traceur" styleClass="titre-carte"/>
+        <HBox spacing="8">
+            <TextField fx:id="traceur" HBox.hgrow="ALWAYS"
+                       promptText="Traceur du récépissé de l'électeur (64 caractères)"/>
+            <Button fx:id="rechercher" text="Rechercher" onAction="#rechercher"/>
+        </HBox>
+        <Label styleClass="aide" wrapText="true"
+               text="Le traceur est l'empreinte du bulletin chiffré : il prouve qu'un bulletin est dans l'urne publiée, donc compté, sans révéler ni le vote ni l'électeur."/>
+    </VBox>
+
     <FicheReferendum fx:id="fiche" visible="false" managed="false"/>
 
     <VBox fx:id="carteResultat" styleClass="carte" spacing="10" VBox.vgrow="ALWAYS"

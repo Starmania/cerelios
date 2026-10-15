@@ -1,5 +1,6 @@
 package fr.cerelios.gui.auditeur;
 
+import fr.cerelios.electeur.Electeur;
 import fr.cerelios.gui.Contexte;
 import fr.cerelios.gui.FicheReferendum;
 import fr.cerelios.gui.Statut;
@@ -10,8 +11,10 @@ import fr.cerelios.protocole.messages.Referendum;
 import fr.cerelios.protocole.messages.ReferendumPublic;
 import fr.cerelios.protocole.messages.Requete;
 import java.util.List;
+import java.util.Locale;
 import javafx.fxml.FXML;
 import javafx.scene.Parent;
+import javafx.scene.control.Button;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
@@ -22,6 +25,8 @@ public final class Audit {
     private final Contexte contexte;
     private final Statut statut = new Statut();
     @FXML private TextField referendum;
+    @FXML private TextField traceur;
+    @FXML private Button rechercher;
     @FXML private FicheReferendum fiche;
     @FXML private VBox carteResultat;
     @FXML private VBox resume;
@@ -33,6 +38,35 @@ public final class Audit {
 
     public Parent vue() {
         return Ui.page(contexte, "Auditeur", Ui.charger("Audit.fxml", this), statut);
+    }
+
+    @FXML
+    private void initialize() {
+        rechercher
+                .disableProperty()
+                .bind(referendum.textProperty().isEmpty().or(traceur.textProperty().isEmpty()));
+    }
+
+    /** Cherche le bulletin dont l'empreinte est {@code traceur} dans l'urne publiée. */
+    @FXML
+    private void rechercher() {
+        String id = referendum.getText().strip();
+        // Les traceurs sont en hexadécimal minuscule ; on tolère une copie en majuscules.
+        String empreinte = traceur.getText().strip().toLowerCase(Locale.ROOT);
+        contexte.executer(
+                statut,
+                () -> new Electeur(contexte.urne(), Contexte.GROUPE).bulletinPresent(id, empreinte),
+                present -> {
+                    if (present) {
+                        statut.succes(
+                                "Ce bulletin est dans l'urne publiée : il compte dans le total.");
+                    } else {
+                        statut.erreur(
+                                "Aucun bulletin avec ce traceur. L'électeur a pu revoter (seul son"
+                                        + " dernier bulletin reste), sinon le bulletin a disparu :"
+                                        + " c'est à signaler.");
+                    }
+                });
     }
 
     private record Audite(DonneesPubliques donnees, List<String> anomalies) {}
