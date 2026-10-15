@@ -37,13 +37,13 @@
         <Label text="Credentials" styleClass="titre-carte"/>
         <HBox spacing="12" alignment="CENTER_LEFT">
             <Label text="Fichier" styleClass="libelle"/>
-            <ChampFichier fx:id="fichier" invite="Fichier des credentials secrets" enregistrer="true"
-                          HBox.hgrow="ALWAYS"/>
+            <ChampFichier fx:id="fichier" invite="Fichier des credentials secrets"
+                          libelleGenerer="Générer un fichier…" HBox.hgrow="ALWAYS"/>
         </HBox>
         <Label styleClass="aide" wrapText="true"
-               text="Les credentials sont générés sur ce poste. Seule leur partie publique part à l'urne ; les parties secrètes sont enregistrées dans le fichier, à remettre à chaque électeur par vos propres moyens."/>
+               text="Choisissez votre fichier de credentials, ou générez-en un : une ligne « électeur:secret » par électeur de la liste, enregistrée où vous voulez et modifiable avant publication. Seule la partie publique de chaque credential part à l'urne ; remettez les secrets aux électeurs par vos propres moyens."/>
         <HBox spacing="8">
-            <Button text="Générer et enregistrer" styleClass="principal" onAction="#generer"/>
+            <Button text="Publier les credentials" styleClass="principal" onAction="#publier"/>
             <Button text="Vérifier la publication" onAction="#verifier"/>
         </HBox>
     </VBox>

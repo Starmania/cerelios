@@ -3,8 +3,8 @@ package fr.cerelios.autorite;
 import static fr.cerelios.protocole.Conversions.entier;
 import static fr.cerelios.protocole.Conversions.octets;
 
-import fr.cerelios.crypto.Elgamal.PaireDeCles;
 import fr.cerelios.crypto.Elgamal;
+import fr.cerelios.crypto.Elgamal.PaireDeCles;
 import fr.cerelios.crypto.Groupe;
 import fr.cerelios.protocole.ClientUrne;
 import fr.cerelios.protocole.RefusException;
@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -59,19 +60,46 @@ public class AutoriteCertification {
      * secrètes (électeur → secret en hexadécimal), à transmettre à chacun hors de l'urne.
      */
     public Map<String, String> generer() throws IOException, RefusException {
+        Map<String, String> secrets = genererSecrets();
+        deposer(secrets);
+        return secrets;
+    }
+
+    /**
+     * Tire un credential secret par électeur de la liste, sans rien envoyer : de quoi écrire le
+     * fichier de l'autorité, qu'elle déposera ensuite avec {@link #deposer}.
+     */
+    public Map<String, String> genererSecrets() throws IOException, RefusException {
         Map<String, String> secrets = new LinkedHashMap<>();
+        for (String electeur : electeurs()) {
+            secrets.put(electeur, Elgamal.keyGen(groupe).secrete().toString(16));
+        }
+        return secrets;
+    }
+
+    /**
+     * Dépose la partie publique de chaque credential secret (électeur → secret en hexadécimal), par
+     * exemple relus d'un fichier écrit avec {@link #enregistrer}.
+     *
+     * @throws RefusException si un secret est invalide, ou si l'urne refuse la liste
+     */
+    public void deposer(Map<String, String> secrets) throws IOException, RefusException {
         DeposerCredentials.Builder depot =
                 DeposerCredentials.newBuilder().setReferendum(referendum);
-        for (String electeur : electeurs()) {
-            PaireDeCles credential = Elgamal.keyGen(groupe);
-            secrets.put(electeur, credential.secrete().toString(16));
+        for (Map.Entry<String, String> e : secrets.entrySet()) {
+            PaireDeCles credential;
+            try {
+                credential =
+                        Elgamal.depuisSecrete(groupe, new BigInteger(e.getValue().strip(), 16));
+            } catch (IllegalArgumentException invalide) {
+                throw new RefusException("Credential invalide pour « " + e.getKey() + " »");
+            }
             depot.addCredentials(
                     CredentialPublic.newBuilder()
-                            .setElecteur(electeur)
+                            .setElecteur(e.getKey())
                             .setCredential(octets(credential.publique())));
         }
         urne.appeler(Requete.newBuilder().setJeton(jeton).setDeposerCredentials(depot));
-        return secrets;
     }
 
     /**
@@ -104,11 +132,19 @@ public class AutoriteCertification {
         return anomalies;
     }
 
-    /** Enregistre les secrets, une ligne {@code électeur:secret} par électeur. */
+    /**
+     * Enregistre les secrets dans un nouveau fichier, une ligne {@code électeur:secret} par
+     * électeur ; le fichier peut ensuite être relu et modifié à la main.
+     *
+     * @throws java.nio.file.FileAlreadyExistsException si le fichier existe déjà
+     */
     public static void enregistrer(Map<String, String> secrets, Path fichier) throws IOException {
+        // CREATE_NEW : un fichier de credentials existant n'est jamais écrasé.
         Files.write(
                 fichier,
-                secrets.entrySet().stream().map(e -> e.getKey() + ":" + e.getValue()).toList());
+                secrets.entrySet().stream().map(e -> e.getKey() + ":" + e.getValue()).toList(),
+                StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.WRITE);
     }
 
     /**

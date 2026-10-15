@@ -125,7 +125,8 @@ class ServeurUrneTest {
     void referendumCompletParLeReseau() throws Exception {
         List<Scrutateur> scrutateurs = inscrireScrutateurs(1);
         Path secret = dossier.resolve("S1.cle");
-        scrutateurs.getFirst().genererCle(secret);
+        Scrutateur.genererFichierSecret(GROUPE, secret);
+        scrutateurs.getFirst().deposerCle(secret);
 
         Map<String, String> credentials = certifierEtValider();
 
@@ -168,6 +169,7 @@ class ServeurUrneTest {
         List<Path> secrets = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
             secrets.add(dossier.resolve("S" + (i + 1) + ".canal"));
+            Scrutateur.genererFichierSecret(GROUPE, secrets.getLast());
         }
 
         // Chaque scrutateur avance quand il peut ; une étape attend que tous aient fini la
@@ -224,7 +226,8 @@ class ServeurUrneTest {
                                             .setAdresse("localhost:" + certification.port())
                                             .setEmailOperateur("op@exemple.fr")));
             Path secret = dossier.resolve("S1.cle");
-            inscrireScrutateurs(1).getFirst().genererCle(secret);
+            Scrutateur.genererFichierSecret(GROUPE, secret);
+            inscrireScrutateurs(1).getFirst().deposerCle(secret);
 
             admin.appeler(Requete.newBuilder().setDemanderCredentials(ref()));
             // Rien n'est envoyé aux électeurs avant la validation.

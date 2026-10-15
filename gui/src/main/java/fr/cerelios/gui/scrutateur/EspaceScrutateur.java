@@ -10,7 +10,7 @@ import fr.cerelios.protocole.messages.EtatPartage;
 import fr.cerelios.protocole.messages.ReferendumPublic;
 import fr.cerelios.scrutateur.Scrutateur;
 import java.io.IOException;
-import java.nio.file.Files;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Path;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -61,6 +61,12 @@ public final class EspaceScrutateur {
 
     @FXML
     private void initialize() {
+        fichier.setGeneration(nomParDefaut(), this::genererFichier);
+        nom.textProperty()
+                .addListener((o, avant, apres) -> fichier.setNomParDefaut(nomParDefaut()));
+        referendum
+                .textProperty()
+                .addListener((o, avant, apres) -> fichier.setNomParDefaut(nomParDefaut()));
         automatique
                 .selectedProperty()
                 .addListener(
@@ -104,21 +110,45 @@ public final class EspaceScrutateur {
         }
     }
 
+    /** Écrit une nouvelle clé secrète à l'emplacement choisi, puis remplit le champ. */
+    private void genererFichier(Path f) {
+        try {
+            Scrutateur.genererFichierSecret(Contexte.GROUPE, f);
+        } catch (FileAlreadyExistsException e) {
+            statut.erreur(
+                    "« "
+                            + f.getFileName()
+                            + " » existe déjà : choisissez un autre nom pour ne rien écraser.");
+            return;
+        } catch (IOException e) {
+            statut.erreur("Écriture impossible : " + e.getMessage());
+            return;
+        }
+        fichier.setChemin(f);
+        statut.succes("Fichier secret créé : " + f + ". Gardez-en une copie sûre.");
+    }
+
+    private String nomParDefaut() {
+        return ChampFichier.nom(
+                        "cerelios",
+                        "scrutateur",
+                        nom.getText().strip(),
+                        referendum.getText().strip())
+                + ".cle";
+    }
+
     @FXML
-    private void generer() {
+    private void deposer() {
         Path f = fichierOuErreur();
         if (f == null) {
             return;
         }
-        if (Files.exists(f)) {
-            statut.erreur(
-                    "Ce fichier existe déjà : choisissez-en un nouveau pour ne rien écraser.");
-            return;
-        }
         contexte.executer(
                 statut,
-                () -> scrutateur().genererCle(f),
-                cle -> statut.succes("Clé déposée. Partie secrète enregistrée dans " + f + "."));
+                () -> scrutateur().deposerCle(f),
+                cle ->
+                        statut.succes(
+                                "Clé déposée : sa partie publique est enregistrée par l'urne."));
     }
 
     @FXML

@@ -57,24 +57,61 @@ public final class Autorite {
     }
 
     @FXML
-    private void generer() {
-        Path f = fichierOuErreur();
-        if (f == null) {
-            return;
-        }
+    private void initialize() {
+        fichier.setGeneration(nomParDefaut(), this::genererFichier);
+        referendum
+                .textProperty()
+                .addListener((o, avant, apres) -> fichier.setNomParDefaut(nomParDefaut()));
+    }
+
+    private String nomParDefaut() {
+        return ChampFichier.nom("cerelios", "credentials", referendum.getText().strip()) + ".txt";
+    }
+
+    /** Tire un credential par électeur de la liste et les écrit à l'emplacement choisi. */
+    private void genererFichier(Path f) {
         if (Files.exists(f)) {
             statut.erreur(
-                    "Ce fichier existe déjà : choisissez-en un nouveau pour ne rien écraser.");
+                    "« "
+                            + f.getFileName()
+                            + " » existe déjà : choisissez un autre nom pour ne rien écraser.");
             return;
         }
         contexte.executer(
                 statut,
                 () -> {
-                    Map<String, String> secrets = autorite().generer();
+                    Map<String, String> secrets = autorite().genererSecrets();
                     AutoriteCertification.enregistrer(secrets, f);
                     return secrets.size();
                 },
-                n -> statut.succes(n + " credentials générés ; parties secrètes dans " + f + "."));
+                n -> {
+                    fichier.setChemin(f);
+                    statut.succes(
+                            n
+                                    + " credentials écrits dans "
+                                    + f
+                                    + ". Relisez-le si besoin, puis publiez.");
+                });
+    }
+
+    @FXML
+    private void publier() {
+        Path f = fichierOuErreur();
+        if (f == null) {
+            return;
+        }
+        contexte.executer(
+                statut,
+                () -> {
+                    Map<String, String> secrets = AutoriteCertification.relire(f);
+                    autorite().deposer(secrets);
+                    return secrets.size();
+                },
+                n ->
+                        statut.succes(
+                                n
+                                        + " credentials publiés : l'urne n'a reçu que leur partie"
+                                        + " publique."));
     }
 
     @FXML

@@ -5,9 +5,9 @@ import static fr.cerelios.protocole.Conversions.octets;
 import static fr.cerelios.protocole.Conversions.versProto;
 
 import fr.cerelios.crypto.ChiffrementHybride;
+import fr.cerelios.crypto.Elgamal;
 import fr.cerelios.crypto.Elgamal.Chiffre;
 import fr.cerelios.crypto.Elgamal.PaireDeCles;
-import fr.cerelios.crypto.Elgamal;
 import fr.cerelios.crypto.Groupe;
 import fr.cerelios.crypto.Partage;
 import fr.cerelios.crypto.Preuves;
@@ -61,14 +61,22 @@ public class Scrutateur {
     }
 
     /**
-     * Mode où chaque scrutateur a sa propre clé : génère la part de clé, enregistre sa partie
-     * secrète dans {@code fichierSecret} puis dépose la partie publique et sa preuve. Le fichier
-     * est écrit avant l'envoi : une clé publiée dont le secret serait perdu bloquerait le
-     * dépouillement.
+     * Écrit une clé secrète tirée au hasard dans un nouveau fichier, en hexadécimal, lisible par
+     * son seul propriétaire si le système le permet. Le scrutateur garde ce fichier : il sert à
+     * déposer sa clé (ou, en mode à seuil, sa clé de canal) puis à déchiffrer.
+     *
+     * @throws java.nio.file.FileAlreadyExistsException si le fichier existe : jamais d'écrasement
      */
-    public BigInteger genererCle(Path fichierSecret) throws IOException, RefusException {
-        PaireDeCles cles = Elgamal.keyGen(groupe);
-        enregistrer(fichierSecret, cles.secrete());
+    public static void genererFichierSecret(Groupe groupe, Path fichier) throws IOException {
+        enregistrer(fichier, Elgamal.keyGen(groupe).secrete());
+    }
+
+    /**
+     * Mode où chaque scrutateur a sa propre clé : dépose la partie publique de la clé contenue dans
+     * {@code fichierSecret}, avec la preuve qu'il en connaît la partie secrète.
+     */
+    public BigInteger deposerCle(Path fichierSecret) throws IOException, RefusException {
+        PaireDeCles cles = relire(fichierSecret);
         urne.appeler(
                 Requete.newBuilder()
                         .setJeton(jeton)
@@ -161,8 +169,9 @@ public class Scrutateur {
      * atteinte. À rappeler tant qu'elle n'est pas {@code TERMINE} : chaque étape attend que tous
      * les scrutateurs aient fini la précédente.
      *
-     * <p>{@code fichierSecret} garde la clé de canal, seul secret à conserver : la part de clé se
-     * recalcule à partir des parts chiffrées que l'urne garde.
+     * <p>{@code fichierSecret}, créé par {@link #genererFichierSecret}, contient la clé de canal,
+     * seul secret à conserver : la part de clé se recalcule à partir des parts chiffrées que l'urne
+     * garde.
      */
     public EtatPartage.Etape avancerPartage(Path fichierSecret) throws IOException, RefusException {
         EtatPartage etat = partage();
@@ -170,14 +179,7 @@ public class Scrutateur {
         switch (etat.getEtape()) {
             case CANAUX -> {
                 if (moi.getCleCanal().isEmpty()) {
-                    PaireDeCles canal;
-                    if (Files.exists(fichierSecret)) {
-                        canal = relire(fichierSecret);
-                    } else {
-                        canal = Elgamal.keyGen(groupe);
-                        enregistrer(fichierSecret, canal.secrete());
-                    }
-                    deposerCleCanal(canal);
+                    deposerCleCanal(relire(fichierSecret));
                 }
             }
             case POLYNOMES -> {
@@ -353,9 +355,21 @@ public class Scrutateur {
                 .getDonneesPubliques();
     }
 
+    /**
+     * Relit la clé d'un fichier secret : un nombre hexadécimal, espaces autour ignorés.
+     *
+     * @throws IOException si le fichier manque ou ne contient pas une clé valide
+     */
     private PaireDeCles relire(Path fichierSecret) throws IOException {
-        return Elgamal.depuisSecrete(
-                groupe, new BigInteger(Files.readString(fichierSecret).strip(), 16));
+        String contenu = Files.readString(fichierSecret).strip();
+        try {
+            return Elgamal.depuisSecrete(groupe, new BigInteger(contenu, 16));
+        } catch (IllegalArgumentException e) {
+            throw new IOException(
+                    "Le fichier "
+                            + fichierSecret.getFileName()
+                            + " ne contient pas une clé valide");
+        }
     }
 
     /**
