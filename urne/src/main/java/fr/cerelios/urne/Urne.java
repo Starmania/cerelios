@@ -247,6 +247,8 @@ public class Urne {
                 "Ouvrez l'application Cerelios en tant que scrutateur et saisissez :\n"
                         + "  référendum : "
                         + ref.id()
+                        + "\n  nom : "
+                        + m.getNom()
                         + "\n  jeton : "
                         + jetonScrutateur
                         + "\nGardez ce jeton secret : il vous identifie auprès de l'urne.");

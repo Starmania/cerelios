@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>fr.cerelios</groupId>
+        <artifactId>cerelios</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>autorite</artifactId>
+    <description>Autorité de certification : génère et distribue les credentials des électeurs</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>fr.cerelios</groupId>
+            <artifactId>protocole</artifactId>
+        </dependency>
+    </dependencies>
+</project>

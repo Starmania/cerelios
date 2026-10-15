@@ -19,6 +19,7 @@
         <module>electeur</module>
         <module>gui</module>
         <module>scrutateur</module>
+        <module>autorite</module>
         <module>attaques</module>
     </modules>
 
@@ -56,6 +57,11 @@
             <dependency>
                 <groupId>fr.cerelios</groupId>
                 <artifactId>scrutateur</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>fr.cerelios</groupId>
+                <artifactId>autorite</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

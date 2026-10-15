@@ -18,5 +18,21 @@
             <groupId>fr.cerelios</groupId>
             <artifactId>protocole</artifactId>
         </dependency>
+        <!-- Clients réels, pour le test de bout en bout par socket -->
+        <dependency>
+            <groupId>fr.cerelios</groupId>
+            <artifactId>electeur</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>fr.cerelios</groupId>
+            <artifactId>scrutateur</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>fr.cerelios</groupId>
+            <artifactId>autorite</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
