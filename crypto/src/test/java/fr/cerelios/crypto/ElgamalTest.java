@@ -128,7 +128,7 @@ class ElgamalTest {
     }
 
     @Test
-    void decryptRetrouveLaSommeDesVotesAPlusieursScrutateurs() {
+    void decryptRetrouveLaSommeDesVotesAPlusieursScrutateurs() throws DechiffrementImpossibleException {
         PaireDeCles a = Elgamal.keyGen(GROUPE);
         PaireDeCles b = Elgamal.keyGen(GROUPE);
         BigInteger y = a.publique().multiply(b.publique()).mod(GROUPE.p());
@@ -153,11 +153,11 @@ class ElgamalTest {
 
         // Un scrutateur seul ne déchiffre rien.
         assertThrows(
-                IllegalArgumentException.class,
+                DechiffrementImpossibleException.class,
                 () -> Elgamal.decrypt(GROUPE, total, List.of(partielA), 3));
         // Trois votes à 1 ne tiennent pas dans une borne de 2.
         assertThrows(
-                IllegalArgumentException.class,
+                DechiffrementImpossibleException.class,
                 () -> Elgamal.decrypt(GROUPE, total, List.of(partielA, partielB), 2));
         assertThrows(
                 IllegalArgumentException.class,
@@ -165,7 +165,7 @@ class ElgamalTest {
     }
 
     @Test
-    void leDechiffrementPartielVautUPuissanceLaPartSecrete() {
+    void leDechiffrementPartielVautUPuissanceLaPartSecrete() throws DechiffrementImpossibleException {
         PaireDeCles cles = Elgamal.keyGen(GROUPE, aleaFixe(0x01));
         Chiffre chiffre = Elgamal.encrypt(GROUPE, cles.publique(), 1, aleaFixe(0x42));
 

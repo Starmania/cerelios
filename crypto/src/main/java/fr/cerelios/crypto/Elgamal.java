@@ -83,11 +83,16 @@ public final class Elgamal {
      * Combine les déchiffrements partiels de tous les scrutateurs et retrouve la somme des votes :
      * g^somme = v / (produit des u^x) mod p, la somme étant cherchée de 0 à {@code borne}.
      *
-     * @throws IllegalArgumentException si aucune somme ne convient : il manque une part, une part
-     *     est fausse ou le chiffré dépasse la borne
+     * <p>Les déchiffrements partiels ne sont pas vérifiés. Un scrutateur qui forge le sien fait
+     * renvoyer la somme de son choix, sans erreur : seule une preuve jointe à chaque déchiffrement
+     * partiel l'en empêcherait.
+     *
+     * @throws IllegalArgumentException si un déchiffrement partiel est nul modulo p
+     * @throws DechiffrementImpossibleException si aucune somme de 0 à {@code borne} ne convient :
+     *     il manque une part, une part est erronée ou la somme sort de cet intervalle
      */
-    public static int decrypt(
-            Groupe groupe, Chiffre chiffre, List<BigInteger> partiels, int borne) {
+    public static int decrypt(Groupe groupe, Chiffre chiffre, List<BigInteger> partiels, int borne)
+            throws DechiffrementImpossibleException {
         BigInteger p = groupe.p();
         BigInteger masque =
                 partiels.stream().reduce(BigInteger.ONE, (a, b) -> a.multiply(b).mod(p));
@@ -95,7 +100,7 @@ public final class Elgamal {
             throw new IllegalArgumentException("Déchiffrement partiel nul modulo p");
         }
         BigInteger gSomme = chiffre.v().multiply(masque.modInverse(p)).mod(p);
-        // Recherche exhaustive : suffit tant que la borne est le nombre de bulletins reçus.
+        // Recherche exhaustive : suffit tant que la borne est le nombre d'électeurs.
         BigInteger puissance = BigInteger.ONE;
         for (int somme = 0; somme <= borne; somme++) {
             if (puissance.equals(gSomme)) {
@@ -103,6 +108,6 @@ public final class Elgamal {
             }
             puissance = puissance.multiply(groupe.g()).mod(p);
         }
-        throw new IllegalArgumentException("Aucune somme entre 0 et " + borne + " ne correspond");
+        throw new DechiffrementImpossibleException("Aucune somme entre 0 et " + borne + " ne correspond");
     }
 }
