@@ -6,7 +6,7 @@
     import java.time.Instant;
 
     public class Referundum {
-        
+
         private Instant dateFin;
         Clock horloge;
 

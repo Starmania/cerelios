@@ -15,3 +15,9 @@ test:
     when: always
     reports:
       junit: "*/target/surefire-reports/TEST-*.xml"
+
+editorconfig:
+  image: mstruebing/editorconfig-checker:v3.0.3
+  cache: []
+  script:
+    - ec
