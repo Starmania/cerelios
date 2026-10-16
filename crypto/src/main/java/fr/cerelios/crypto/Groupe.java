@@ -29,6 +29,13 @@ public record Groupe(BigInteger p, BigInteger q, BigInteger g) {
     /** Groupe 14 de la RFC 3526 (2048 bits) : p = 2q + 1 et g = 2 est d'ordre q. */
     public static final Groupe RFC_3526 = new Groupe(P_2048, P_2048.shiftRight(1), BigInteger.TWO);
 
+    /** Vrai si 1 ≤ x < p et x^q ≡ 1 mod p, c'est-à-dire si x est dans le sous-groupe d'ordre q. */
+    public boolean contient(BigInteger x) {
+        return x.compareTo(BigInteger.ONE) >= 0
+                && x.compareTo(p) < 0
+                && x.modPow(q, p).equals(BigInteger.ONE);
+    }
+
     /** Tire un exposant uniformément dans [1, q - 1]. */
     public BigInteger tirerExposant() {
         return tirerExposant(ALEA);

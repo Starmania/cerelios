@@ -60,24 +60,6 @@ class ElgamalTest {
     }
 
     @Test
-    void leProduitDeDeuxChiffresChiffreLaSommeDesVotes() {
-        PaireDeCles cles = Elgamal.keyGen(GROUPE);
-        BigInteger p = GROUPE.p();
-
-        for (int vote1 = 0; vote1 <= 1; vote1++) {
-            for (int vote2 = 0; vote2 <= 1; vote2++) {
-                Chiffre a = Elgamal.encrypt(GROUPE, cles.publique(), vote1);
-                Chiffre b = Elgamal.encrypt(GROUPE, cles.publique(), vote2);
-                Chiffre produit =
-                        new Chiffre(a.u().multiply(b.u()).mod(p), a.v().multiply(b.v()).mod(p));
-
-                assertEquals(
-                        GROUPE.g().pow(vote1 + vote2), gPuissanceVote(produit, cles.secrete()));
-            }
-        }
-    }
-
-    @Test
     void encryptRefuseUnVoteOuUneCleInvalide() {
         BigInteger y = Elgamal.keyGen(GROUPE).publique();
 
@@ -125,6 +107,93 @@ class ElgamalTest {
         BigInteger x = GROUPE.tirerExposant(aleaFixe(0x00, 0xFF, 0x01));
 
         assertEquals(new BigInteger("01".repeat(256), 16), x);
+    }
+
+    @Test
+    void agregeMultiplieLesComposantesModuloP() {
+        // (p + 1) / 2 est l'inverse de g = 2, donc dans le sous-groupe d'ordre q.
+        BigInteger p = GROUPE.p();
+        BigInteger inverseDeDeux = p.add(BigInteger.ONE).shiftRight(1);
+        Chiffre a = new Chiffre(inverseDeDeux, inverseDeDeux);
+        Chiffre b = new Chiffre(inverseDeDeux, BigInteger.TWO);
+
+        // 2⁻¹ · 2⁻¹ = 4⁻¹ = (p + 1) / 4 et 2⁻¹ · 2 = 1 : les deux produits dépassent p avant
+        // réduction.
+        assertEquals(
+                new Chiffre(p.add(BigInteger.ONE).shiftRight(2), BigInteger.ONE),
+                Elgamal.agrege(GROUPE, a, b));
+    }
+
+    @Test
+    void agregeRejetteUnChiffreHorsDuSousGroupe() {
+        BigInteger p = GROUPE.p();
+        Chiffre valide = Elgamal.encrypt(GROUPE, Elgamal.keyGen(GROUPE).publique(), 1);
+        // p - 1 est dans [1, p - 1] mais d'ordre 2 : seul le test d'appartenance l'écarte.
+        for (BigInteger invalide : List.of(BigInteger.ZERO, p, p.subtract(BigInteger.ONE))) {
+            for (Chiffre chiffre :
+                    List.of(new Chiffre(invalide, valide.v()), new Chiffre(valide.u(), invalide))) {
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Elgamal.agrege(GROUPE, chiffre, valide));
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Elgamal.agrege(GROUPE, valide, chiffre));
+            }
+        }
+    }
+
+    @Test
+    void agregeRejetteUnParametreNul() {
+        Chiffre valide = Elgamal.encrypt(GROUPE, Elgamal.keyGen(GROUPE).publique(), 1);
+
+        assertThrows(NullPointerException.class, () -> Elgamal.agrege(null, valide, valide));
+        assertThrows(NullPointerException.class, () -> Elgamal.agrege(GROUPE, null, valide));
+        assertThrows(NullPointerException.class, () -> Elgamal.agrege(GROUPE, valide, null));
+        assertThrows(
+                NullPointerException.class,
+                () -> Elgamal.agrege(GROUPE, new Chiffre(null, valide.v()), valide));
+    }
+
+    @Test
+    void agregeDeDeuxBulletinsChiffreLaSommeDesVotes() {
+        PaireDeCles cles = Elgamal.keyGen(GROUPE);
+
+        for (int vote1 = 0; vote1 <= 1; vote1++) {
+            for (int vote2 = 0; vote2 <= 1; vote2++) {
+                Chiffre agregat =
+                        Elgamal.agrege(
+                                GROUPE,
+                                Elgamal.encrypt(GROUPE, cles.publique(), vote1),
+                                Elgamal.encrypt(GROUPE, cles.publique(), vote2));
+
+                assertEquals(
+                        GROUPE.g().pow(vote1 + vote2), gPuissanceVote(agregat, cles.secrete()));
+            }
+        }
+    }
+
+    @Test
+    void leDechiffrementDeLAgregatDeNBulletinsEstLaSommeDesNVotes() throws DechiffrementImpossibleException {
+        PaireDeCles cles = Elgamal.keyGen(GROUPE);
+        int[] votes = {1, 0, 1, 1, 0, 1};
+
+        Chiffre agregat = totalChiffre(cles.publique(), votes);
+
+        BigInteger partiel = Elgamal.dechiffrementPartiel(GROUPE, agregat, cles.secrete());
+        assertEquals(4, Elgamal.decrypt(GROUPE, agregat, List.of(partiel), votes.length));
+    }
+
+    @Test
+    void agregeNeDependPasDeLOrdreDesBulletins() {
+        BigInteger y = Elgamal.keyGen(GROUPE).publique();
+        Chiffre a = Elgamal.encrypt(GROUPE, y, 1);
+        Chiffre b = Elgamal.encrypt(GROUPE, y, 0);
+        Chiffre c = Elgamal.encrypt(GROUPE, y, 1);
+
+        assertEquals(Elgamal.agrege(GROUPE, a, b), Elgamal.agrege(GROUPE, b, a));
+        assertEquals(
+                Elgamal.agrege(GROUPE, Elgamal.agrege(GROUPE, a, b), c),
+                Elgamal.agrege(GROUPE, a, Elgamal.agrege(GROUPE, b, c)));
     }
 
     @Test
@@ -184,16 +253,11 @@ class ElgamalTest {
         return chiffre.v().multiply(chiffre.u().modPow(x, p).modInverse(p)).mod(p);
     }
 
-    /** Chiffre chaque vote avec {@code y} puis multiplie les chiffrés, en attendant Agrege. */
+    /** Chiffre chaque vote avec {@code y} puis agrège les chiffrés, en partant du chiffré neutre. */
     private static Chiffre totalChiffre(BigInteger y, int... votes) {
-        BigInteger p = GROUPE.p();
         Chiffre total = new Chiffre(BigInteger.ONE, BigInteger.ONE);
         for (int vote : votes) {
-            Chiffre bulletin = Elgamal.encrypt(GROUPE, y, vote);
-            total =
-                    new Chiffre(
-                            total.u().multiply(bulletin.u()).mod(p),
-                            total.v().multiply(bulletin.v()).mod(p));
+            total = Elgamal.agrege(GROUPE, total, Elgamal.encrypt(GROUPE, y, vote));
         }
         return total;
     }
