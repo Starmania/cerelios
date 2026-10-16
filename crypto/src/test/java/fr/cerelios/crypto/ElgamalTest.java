@@ -111,14 +111,47 @@ class ElgamalTest {
 
     @Test
     void agregeMultiplieLesComposantesModuloP() {
+        // (p + 1) / 2 est l'inverse de g = 2, donc dans le sous-groupe d'ordre q.
         BigInteger p = GROUPE.p();
-        Chiffre a = new Chiffre(p.subtract(BigInteger.ONE), p.subtract(BigInteger.TWO));
-        Chiffre b = new Chiffre(p.subtract(BigInteger.ONE), BigInteger.TWO);
+        BigInteger inverseDeDeux = p.add(BigInteger.ONE).shiftRight(1);
+        Chiffre a = new Chiffre(inverseDeDeux, inverseDeDeux);
+        Chiffre b = new Chiffre(inverseDeDeux, BigInteger.TWO);
 
-        // (-1)(-1) = 1 et (-2)(2) = -4 : les deux produits dépassent p avant réduction.
+        // 2⁻¹ · 2⁻¹ = 4⁻¹ = (p + 1) / 4 et 2⁻¹ · 2 = 1 : les deux produits dépassent p avant
+        // réduction.
         assertEquals(
-                new Chiffre(BigInteger.ONE, p.subtract(BigInteger.valueOf(4))),
+                new Chiffre(p.add(BigInteger.ONE).shiftRight(2), BigInteger.ONE),
                 Elgamal.agrege(GROUPE, a, b));
+    }
+
+    @Test
+    void agregeRejetteUnChiffreHorsDuSousGroupe() {
+        BigInteger p = GROUPE.p();
+        Chiffre valide = Elgamal.encrypt(GROUPE, Elgamal.keyGen(GROUPE).publique(), 1);
+        // p - 1 est dans [1, p - 1] mais d'ordre 2 : seul le test d'appartenance l'écarte.
+        for (BigInteger invalide : List.of(BigInteger.ZERO, p, p.subtract(BigInteger.ONE))) {
+            for (Chiffre chiffre :
+                    List.of(new Chiffre(invalide, valide.v()), new Chiffre(valide.u(), invalide))) {
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Elgamal.agrege(GROUPE, chiffre, valide));
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Elgamal.agrege(GROUPE, valide, chiffre));
+            }
+        }
+    }
+
+    @Test
+    void agregeRejetteUnParametreNul() {
+        Chiffre valide = Elgamal.encrypt(GROUPE, Elgamal.keyGen(GROUPE).publique(), 1);
+
+        assertThrows(NullPointerException.class, () -> Elgamal.agrege(null, valide, valide));
+        assertThrows(NullPointerException.class, () -> Elgamal.agrege(GROUPE, null, valide));
+        assertThrows(NullPointerException.class, () -> Elgamal.agrege(GROUPE, valide, null));
+        assertThrows(
+                NullPointerException.class,
+                () -> Elgamal.agrege(GROUPE, new Chiffre(null, valide.v()), valide));
     }
 
     @Test

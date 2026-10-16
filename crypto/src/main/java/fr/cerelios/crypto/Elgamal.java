@@ -3,6 +3,7 @@ package fr.cerelios.crypto;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.List;
+import java.util.Objects;
 import org.jetbrains.annotations.TestOnly;
 
 /** Chiffrement Elgamal homomorphe. */
@@ -61,9 +62,7 @@ public final class Elgamal {
         }
         BigInteger p = groupe.p();
         // Avec une clé hors du sous-groupe d'ordre q (1 ou p - 1 par exemple), v révélerait le vote.
-        if (y.compareTo(BigInteger.ONE) <= 0
-                || y.compareTo(p) >= 0
-                || !y.modPow(groupe.q(), p).equals(BigInteger.ONE)) {
+        if (y.equals(BigInteger.ONE) || !groupe.contient(y)) {
             throw new IllegalArgumentException("Clé publique hors du sous-groupe d'ordre q");
         }
         BigInteger gVote = vote == 1 ? groupe.g() : BigInteger.ONE;
@@ -73,12 +72,24 @@ public final class Elgamal {
     /**
      * Agrège deux chiffrés en (u × u′ mod p, v × v′ mod p), qui chiffre la somme de leurs votes.
      * Le calcul n'utilise aucun secret : chacun peut le refaire à partir des bulletins publiés.
+     *
+     * @throws IllegalArgumentException si une composante de {@code a} ou {@code b} est hors du
+     *     sous-groupe d'ordre q
      */
     public static Chiffre agrege(Groupe groupe, Chiffre a, Chiffre b) {
-        // Les chiffrés ne sont pas vérifiés : un seul hors du groupe, (0, 0) par exemple, rend
-        // l'agrégat indéchiffrable.
+        Objects.requireNonNull(groupe, "groupe");
+        // Un seul chiffré hors du sous-groupe, (0, 0) par exemple, rendrait l'agrégat indéchiffrable.
+        verifie(groupe, Objects.requireNonNull(a, "a"));
+        verifie(groupe, Objects.requireNonNull(b, "b"));
         BigInteger p = groupe.p();
         return new Chiffre(a.u().multiply(b.u()).mod(p), a.v().multiply(b.v()).mod(p));
+    }
+
+    private static void verifie(Groupe groupe, Chiffre chiffre) {
+        if (!groupe.contient(Objects.requireNonNull(chiffre.u(), "u"))
+                || !groupe.contient(Objects.requireNonNull(chiffre.v(), "v"))) {
+            throw new IllegalArgumentException("Chiffré hors du sous-groupe d'ordre q");
+        }
     }
 
     /**
