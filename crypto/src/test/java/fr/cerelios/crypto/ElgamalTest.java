@@ -11,6 +11,7 @@ import fr.cerelios.crypto.Elgamal.PaireDeCles;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ElgamalTest {
@@ -126,10 +127,75 @@ class ElgamalTest {
         assertEquals(new BigInteger("01".repeat(256), 16), x);
     }
 
-    /** Déchiffrement à la main, en attendant Decrypt : v / u^x redonne g^vote. */
+    @Test
+    void decryptRetrouveLaSommeDesVotesAPlusieursScrutateurs() throws DechiffrementImpossibleException {
+        PaireDeCles a = Elgamal.keyGen(GROUPE);
+        PaireDeCles b = Elgamal.keyGen(GROUPE);
+        BigInteger y = a.publique().multiply(b.publique()).mod(GROUPE.p());
+        Chiffre total = totalChiffre(y, 1, 0, 1, 1);
+
+        List<BigInteger> partiels =
+                List.of(
+                        Elgamal.dechiffrementPartiel(GROUPE, total, a.secrete()),
+                        Elgamal.dechiffrementPartiel(GROUPE, total, b.secrete()));
+
+        assertEquals(3, Elgamal.decrypt(GROUPE, total, partiels, 4));
+    }
+
+    @Test
+    void decryptEchoueSansToutesLesPartsOuAuDelaDeLaBorne() {
+        PaireDeCles a = Elgamal.keyGen(GROUPE);
+        PaireDeCles b = Elgamal.keyGen(GROUPE);
+        BigInteger y = a.publique().multiply(b.publique()).mod(GROUPE.p());
+        Chiffre total = totalChiffre(y, 1, 1, 1);
+        BigInteger partielA = Elgamal.dechiffrementPartiel(GROUPE, total, a.secrete());
+        BigInteger partielB = Elgamal.dechiffrementPartiel(GROUPE, total, b.secrete());
+
+        // Un scrutateur seul ne déchiffre rien.
+        assertThrows(
+                DechiffrementImpossibleException.class,
+                () -> Elgamal.decrypt(GROUPE, total, List.of(partielA), 3));
+        // Trois votes à 1 ne tiennent pas dans une borne de 2.
+        assertThrows(
+                DechiffrementImpossibleException.class,
+                () -> Elgamal.decrypt(GROUPE, total, List.of(partielA, partielB), 2));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> Elgamal.decrypt(GROUPE, total, List.of(partielA, BigInteger.ZERO), 3));
+    }
+
+    @Test
+    void leDechiffrementPartielVautUPuissanceLaPartSecrete() throws DechiffrementImpossibleException {
+        PaireDeCles cles = Elgamal.keyGen(GROUPE, aleaFixe(0x01));
+        Chiffre chiffre = Elgamal.encrypt(GROUPE, cles.publique(), 1, aleaFixe(0x42));
+
+        BigInteger partiel = Elgamal.dechiffrementPartiel(GROUPE, chiffre, cles.secrete());
+
+        // u = g^r, donc u^x = g^(r·x) pour les tirages fixés r = 0x42…42 et x = 0x01…01.
+        BigInteger r = new BigInteger("42".repeat(256), 16);
+        BigInteger x = new BigInteger("01".repeat(256), 16);
+        assertEquals(GROUPE.g().modPow(r.multiply(x), GROUPE.p()), partiel);
+        assertEquals(1, Elgamal.decrypt(GROUPE, chiffre, List.of(partiel), 1));
+    }
+
+    /** Déchiffrement à la main, indépendant de Decrypt : v / u^x redonne g^vote. */
     private static BigInteger gPuissanceVote(Chiffre chiffre, BigInteger x) {
         BigInteger p = GROUPE.p();
         return chiffre.v().multiply(chiffre.u().modPow(x, p).modInverse(p)).mod(p);
+    }
+
+    /** Chiffre chaque vote avec {@code y} puis multiplie les chiffrés, en attendant Agrege. */
+    private static Chiffre totalChiffre(BigInteger y, int... votes) {
+        BigInteger p = GROUPE.p();
+        Chiffre total = new Chiffre(BigInteger.ONE, BigInteger.ONE);
+        for (int vote : votes) {
+            Chiffre bulletin = Elgamal.encrypt(GROUPE, y, vote);
+            total =
+                    new Chiffre(
+                            total.u().multiply(bulletin.u()).mod(p),
+                            total.v().multiply(bulletin.v()).mod(p));
+        }
+        return total;
     }
 
     /** Aléa dont le n-ième tirage ne contient que le n-ième octet donné. */
