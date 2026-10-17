@@ -32,9 +32,11 @@ class ServeurSocketTest {
         Thread.sleep(100); // Attente que la socket soit prête
 
         // Client test
-        try (Socket clientSocket = new Socket("localhost", port);
-             OutputStream out = clientSocket.getOutputStream();
-             InputStream in = clientSocket.getInputStream()) {
+        try (
+            Socket clientSocket = new Socket("localhost", port);
+            OutputStream out = clientSocket.getOutputStream();
+            InputStream in = clientSocket.getInputStream()
+        ) {
 
             Message requete = Message.newBuilder()
                 .setDemandeCle(TestDemande.newBuilder().build())

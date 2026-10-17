@@ -41,8 +41,10 @@ public class ServeurSocket {
      * @param socket la connexion {@link Socket} avec le client
      */
     public void traiterClient(Socket socket) {
-        try (InputStream in = socket.getInputStream();
-             OutputStream out = socket.getOutputStream()) {
+        try (
+            InputStream in = socket.getInputStream();
+            OutputStream out = socket.getOutputStream()
+        ) {
 
             Message requete = Message.parseDelimitedFrom(in);
             if (requete == null) return;
