@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package cerelios;
+
+option java_package = "fr.cerelios.protocole.messages";
+option java_multiple_files = true;
+
+// Messages Tests (on modifira par la suite pour mettre ce qu'on veut)
+
+message TestDemande {}
+
+message TestReponse {
+  string reponse = 1;
+}
+
+message Message {
+  oneof payload {
+    TestDemande demande_cle = 1;
+    TestReponse reponse_cle = 2;
+  }
+}
