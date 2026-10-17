@@ -11,7 +11,7 @@ import java.net.Socket;
 /**
  * Serveur Socket réseau gérant la réception et l'aiguillage des messages du protocole.
  */
-public class ServeurSocket {
+public abstract class ServeurSocket {
 
     private final int port;
 
@@ -49,22 +49,19 @@ public class ServeurSocket {
             Message requete = Message.parseDelimitedFrom(in);
             if (requete == null) return;
 
-            Message.Builder reponseBuilder = Message.newBuilder();
-
-            switch (requete.getPayloadCase()) {
-                case DEMANDE_CLE -> {
-                    TestReponse rep = TestReponse.newBuilder()
-                        .setReponse("recu")
-                        .build();
-                    reponseBuilder.setReponseCle(rep);
-                }
-                case PAYLOAD_NOT_SET -> System.err.println("Payload non defini");
-            }
-
-            reponseBuilder.build().writeDelimitedTo(out);
+            Message reponse = traiterMessage(requete);
+            if (reponse != null) reponse.writeDelimitedTo(out);
 
         } catch (Exception e) {
             System.err.println("Erreur traitement client : " + e.getMessage());
         }
     }
+
+    /**
+     * Traite un message Protobuf reçu et retourne le message de réponse correspondant.
+     *
+     * @param requete le message Protobuf reçu du client
+     * @return le message Protobuf de réponse, ou {@code null} si aucune réponse n'est requise
+     */
+    protected abstract Message traiterMessage(Message requete);
 }
