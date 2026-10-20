@@ -1,5 +1,6 @@
 package fr.cerelios.gui.controller;
 
+import java.util.List;
 import java.util.function.Consumer;
 
 import fr.cerelios.gui.ReferendumAffiche;
@@ -15,8 +16,11 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
-/** Écran de choix du référendum après connexion. */
+/** ecran de choix du référendum après connexion. */
 public class ChoixReferendumController {
+
+    /** mettre à true pour tester l'affichage quand aucun référendum n'est en cours. */
+    private static final boolean TEST_LISTE_VIDE = false;
 
     private final String identifiant;
     private final Runnable surDeconnexion;
@@ -32,13 +36,10 @@ public class ChoixReferendumController {
     }
 
     public Parent getVue() {
-        // remplacer par la vraie liste récupérée auprès de l'urne
-        liste.setItems(FXCollections.observableArrayList(
-                new ReferendumAffiche("Référendum 1", "Êtes-vous favorable à la question 1 ?"),
-                new ReferendumAffiche("Référendum 2", "Êtes-vous favorable à la question 2 ?"),
-                new ReferendumAffiche("Référendum 3", "Êtes-vous favorable à la question 3 ?")));
+        liste.setItems(FXCollections.observableArrayList(chargerReferendums()));
+        liste.setPlaceholder(new Label("Aucun référendum en cours."));
 
-        // Double-clic sur un référendum = le choisir
+        // double-clic sur un référendum = le choisir
         liste.setOnMouseClicked(e -> {
             if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) {
                 choisir();
@@ -61,6 +62,17 @@ public class ChoixReferendumController {
         VBox.setVgrow(liste, Priority.ALWAYS);
         racine.setPadding(new Insets(20));
         return racine;
+    }
+
+    private List<ReferendumAffiche> chargerReferendums() {
+        if (TEST_LISTE_VIDE) {
+            return List.of();
+        }
+        // remplacer par la vraie liste récupérée auprès de l'urne
+        return List.of(
+                new ReferendumAffiche("Référendum 1", "Êtes-vous favorable à la question 1 ?"),
+                new ReferendumAffiche("Référendum 2", "Êtes-vous favorable à la question 2 ?"),
+                new ReferendumAffiche("Référendum 3", "Êtes-vous favorable à la question 3 ?"));
     }
 
     private void choisir() {
