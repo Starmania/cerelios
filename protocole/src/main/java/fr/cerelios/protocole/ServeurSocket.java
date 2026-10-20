@@ -13,7 +13,7 @@ import java.net.Socket;
  */
 public abstract class ServeurSocket {
 
-    private final int port;
+    private int port;
 
     public ServeurSocket(int port) {
         this.port = port;
@@ -26,6 +26,7 @@ public abstract class ServeurSocket {
      */
     public void demarrer() {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
+            port = serverSocket.getLocalPort();
             while (!serverSocket.isClosed()) {
                 Socket socket = serverSocket.accept();
                 traiterClient(socket);
@@ -64,4 +65,8 @@ public abstract class ServeurSocket {
      * @return le message Protobuf de réponse, ou {@code null} si aucune réponse n'est requise
      */
     protected abstract Message traiterMessage(Message requete);
+
+    public int getPort() {
+        return port;
+    }
 }
