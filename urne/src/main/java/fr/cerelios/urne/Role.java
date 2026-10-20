@@ -1,6 +1,6 @@
 package fr.cerelios.urne;
 
-/** Rôle d'un compte : il fixe les fonctions auxquelles l'utilisateur a accès, et elles seules. */
+/** Rôle d'un compte : chacun ouvre les fonctions qui lui correspondent, et elles seules. */
 public enum Role {
     ELECTEUR,
     ADMINISTRATEUR,
