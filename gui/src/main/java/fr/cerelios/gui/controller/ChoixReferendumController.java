@@ -1,5 +1,8 @@
 package fr.cerelios.gui.controller;
 
+import java.util.function.Consumer;
+
+import fr.cerelios.gui.ReferendumAffiche;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -7,36 +10,45 @@ import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
+import javafx.scene.input.MouseButton;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
-/** ecran de choix du référendum après connexion. */
+/** Écran de choix du référendum après connexion. */
 public class ChoixReferendumController {
 
     private final String identifiant;
     private final Runnable surDeconnexion;
-    private final ListView<String> liste = new ListView<>();
+    private final Consumer<ReferendumAffiche> surChoix;
+    private final ListView<ReferendumAffiche> liste = new ListView<>();
     private final Label message = new Label();
 
-    public ChoixReferendumController(String identifiant, Runnable surDeconnexion) {
+    public ChoixReferendumController(String identifiant, Runnable surDeconnexion,
+                                     Consumer<ReferendumAffiche> surChoix) {
         this.identifiant = identifiant;
         this.surDeconnexion = surDeconnexion;
+        this.surChoix = surChoix;
     }
 
     public Parent getVue() {
-        // TODO a remplacer surement avec count
+        // remplacer par la vraie liste récupérée auprès de l'urne
         liste.setItems(FXCollections.observableArrayList(
-                "Référendum 1", "Référendum 2", "Référendum 3"));
+                new ReferendumAffiche("Référendum 1", "Êtes-vous favorable à la question 1 ?"),
+                new ReferendumAffiche("Référendum 2", "Êtes-vous favorable à la question 2 ?"),
+                new ReferendumAffiche("Référendum 3", "Êtes-vous favorable à la question 3 ?")));
+
+        // Double-clic sur un référendum = le choisir
+        liste.setOnMouseClicked(e -> {
+            if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) {
+                choisir();
+            }
+        });
 
         Button choisir = new Button("Choisir");
         choisir.setDefaultButton(true);
         choisir.disableProperty().bind(liste.getSelectionModel().selectedItemProperty().isNull());
-        choisir.setOnAction(e -> {
-            String r = liste.getSelectionModel().getSelectedItem();
-            // TODO ouvre ecran de vote
-            message.setText("Sélectionné : " + r);
-        });
+        choisir.setOnAction(e -> choisir());
 
         Button deconnexion = new Button("Déconnexion");
         deconnexion.setOnAction(e -> surDeconnexion.run());
@@ -49,5 +61,12 @@ public class ChoixReferendumController {
         VBox.setVgrow(liste, Priority.ALWAYS);
         racine.setPadding(new Insets(20));
         return racine;
+    }
+
+    private void choisir() {
+        ReferendumAffiche r = liste.getSelectionModel().getSelectedItem();
+        if (r != null) {
+            surChoix.accept(r);
+        }
     }
 }

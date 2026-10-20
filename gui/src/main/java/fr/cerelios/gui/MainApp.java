@@ -2,6 +2,7 @@ package fr.cerelios.gui;
 
 import fr.cerelios.gui.controller.ChoixReferendumController;
 import fr.cerelios.gui.controller.ConnexionController;
+import fr.cerelios.gui.controller.VoteController;
 import javafx.application.Application;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -25,9 +26,17 @@ public class MainApp extends Application {
     }
 
     private void afficherChoix(String identifiant) {
-        ChoixReferendumController choix =
-                new ChoixReferendumController(identifiant, this::afficherConnexion);
+        ChoixReferendumController choix = new ChoixReferendumController(
+                identifiant, this::afficherConnexion, r -> afficherVote(identifiant, r));
         changerVue(choix.getVue());
+    }
+
+    private void afficherVote(String identifiant, ReferendumAffiche referendum) {
+        VoteController vote = new VoteController(
+                referendum,
+                () -> afficherChoix(identifiant),   // Retour
+                choix -> afficherChoix(identifiant)); // Voter -> retour à l'accueil
+        changerVue(vote.getVue());
     }
 
     private void changerVue(Parent vue) {
