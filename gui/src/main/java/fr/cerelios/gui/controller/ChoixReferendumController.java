@@ -28,8 +28,7 @@ public class ChoixReferendumController {
     private final ListView<ReferendumAffiche> liste = new ListView<>();
     private final Label message = new Label();
 
-    public ChoixReferendumController(String identifiant, Runnable surDeconnexion,
-                                     Consumer<ReferendumAffiche> surChoix) {
+    public ChoixReferendumController(String identifiant, Runnable surDeconnexion,Consumer<ReferendumAffiche> surChoix) {
         this.identifiant = identifiant;
         this.surDeconnexion = surDeconnexion;
         this.surChoix = surChoix;
